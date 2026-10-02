@@ -15,11 +15,9 @@
    - **Test needed:** Trigger a model refusal, then escalate and see if the oracle also refuses.
    - **Impact:** Escalation budget wasted; task stops anyway.
 
-3. **Pinned tier burns escalation budget**
-   - A pinned tier still counts toward `maxEscalationsPerTask` if a signal fires (loop, error, review fail).
-   - If pinned at tier 3 and a loop fires, the escalation counter increments (0→1) but the tier doesn't move.
-   - **Test needed:** Pin at tier 2, trigger a loop, check if escalations increments while tier stays at 2.
-   - **Workaround:** Users should unpin before a high-risk operation, or accept budget burn.
+3. **Pinned tier + loop** (resolved by code-read and unit test; live check pending)
+   - Earlier draft claimed a pinned tier burns escalation budget. That was wrong: `decide` returns `hold` when pinned and only `moveTier` increments `escalations`.
+   - Covered by `policy.test.ts` ("decide when pinned"). The 3-strike breaker still applies when pinned.
 
 ## Medium risk (incorrect behavior, edge case mode)
 
@@ -79,12 +77,12 @@
 **High priority (likely to surface bugs):**
 - [ ] Effort downgrade silent failure
 - [ ] Model refusal mid-turn + escalate (does oracle also refuse?)
-- [ ] Pinned tier + loop (check escalations counter increments, tier doesn't)
+- [x] Pinned tier + loop: unit-tested (holds, no budget use); live run pending
 
 **Medium priority (edge case correctness):**
 - [ ] Review with 0 tool calls
 - [ ] De-escalation at base tier (should escalate up, not stay)
-- [ ] baseTier out of bounds in stored policy
+- [x] baseTier out of bounds: unit-tested (clamped)
 
 **Low priority (nice to know):**
 - [ ] Cache cold on revisit after other tiers used

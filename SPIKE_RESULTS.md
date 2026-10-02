@@ -52,19 +52,21 @@
 
 ## Token spend across this spike session
 
+Snapshot of `state.json` at 2026-10-02 (spend accumulates, so earlier figures in this file are stale):
+
 | Tier | Steps | Input | Output | Cache read |
 |---|---|---|---|---|
-| scout | 20 | 140 | 6,789 | 2.75M |
-| worker | 12 | 24 | 9,085 | 2.23M |
-| senior | 5 | 10 | 13,330 | 1.10M |
+| scout | 42 | 323 | 19,615 | 6.14M |
+| worker | 18 | 38 | 16,934 | 3.66M |
+| senior | 6 | 12 | 13,495 | 1.36M |
 | oracle | 3 | 6 | 8,605 | 468K |
-| review:senior | 3 | 7,878 | 3,002 | 0 |
-| **Total** | **43** | **8,058** | **40,811** | **6.64M** |
+| review:senior | 4 | 10,076 | 3,974 | 0 |
+| **Total** | **73** | **10,455** | **54,623** | **11.63M** |
 
 ## Known limitations still open
 
 - **Subagents not managed:** Loop detection and escalation only work on main loop; subagent loops are not escalated.
-- **Pinning edge case:** A pinned tier still counts toward escalation budget; if pinned at a high tier and a loop fires, the budget drains even though the tier doesn't move.
+- **Pinning:** (code-read + unit test, not live) `decide` returns `hold` for every signal when pinned, and only `moveTier` increments `escalations`, so pinning does not drain the budget. The 3-strike loop breaker still applies. Live check needs the user to run `/ladder pin`.
 - **Effort downgrade:** The engine silently downgrades effort for models that don't support it (e.g., Haiku `low` may go unsupported). No feedback to the ladder.
 - **Review on empty context:** A task with no tool calls doesn't trigger review (minToolCalls=3), so false reasoning is only caught if tools were used.
 - **Milestone reviews:** Rely on the model calling `checkpoint()` explicitly; no automatic trigger.
@@ -76,3 +78,13 @@
 3. Add dollar-based ceiling (not just token counts per tier).
 4. Verify effort values are actually honored by each model (log what was asked vs. what was used).
 5. Refinement loop on calibration: tune `confidenceThreshold` from real model self-reports.
+
+## Unplanned live finding: fail-open fired
+
+`state.json` ends with a `breaker` event: `ladder turned off: claude-haiku-4-5-20251001 (scout) was rejected`. The fail-open path turned the ladder off after the scout tier's request was rejected, so the session was not wedged. The cause of the rejection is not yet known (`/ladder probe` would say whether Haiku is currently usable).
+
+## Verification labels
+
+- Verified live: mid-turn switch, step-down, loop escalation, breaker, review-fail escalation, fail-open.
+- Unit-tested (23 tests): `decide` incl. pinned, `normalizePolicy` clamps, alias mapping, loop detector.
+- Code-read only: refusal at oracle, review skipped below `minToolCalls`, effort downgrade.
