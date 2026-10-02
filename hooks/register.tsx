@@ -35,9 +35,25 @@ const notes: string[] = []
 
 // ---------- state helpers ----------
 
+/** Mirror state to a file so the log can be read from outside the session. Never throws. */
+async function mirrorState($: Eng) {
+  try {
+    const home = await $.env.get('USERPROFILE')
+    if (!home) return
+    const [run, policy, log] = [await read($, run$), await read($, policy$), await read($, log$)]
+    await $.fs.write(
+      `${home}/.claude/escalation-ladder/state.json`,
+      JSON.stringify({ writtenAt: await $.clock.now(), run, policy, log }, null, 2),
+    )
+  } catch {
+    /* best effort */
+  }
+}
+
 async function logEvent($: Eng, ev: Omit<LadderEvent, 'at'>) {
   const at = await $.clock.now()
   await update($, log$, l => [...l, { ...ev, at }].slice(-80))
+  await mirrorState($)
 }
 
 async function refreshStatus($: Eng) {
@@ -233,6 +249,7 @@ export const register: Register = on => {
     })
 
     await refreshStatus($)
+    await mirrorState($)
     return next(e)
   })
 

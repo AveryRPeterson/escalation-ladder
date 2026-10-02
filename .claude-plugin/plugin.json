@@ -1,0 +1,6 @@
+{
+  "name": "escalation-ladder",
+  "version": "0.1.0",
+  "description": "Tiered model escalation: start cheap, escalate to an oracle tier on low confidence, loops or failures, with circuit breakers and review passes.",
+  "types": "./types/index.d.ts"
+}
