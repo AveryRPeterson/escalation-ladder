@@ -36,6 +36,10 @@ export type Spend = { steps: number; input: number; output: number; cacheRead: n
 export type RunState = {
   enabled: boolean
   tier: number
+  /** Heaviest rung used in this task; picks the reviewer (review cascade). */
+  peakTier: number
+  /** toolCallsInTask at the last review, so unchanged work is not re-reviewed. */
+  reviewedToolCalls: number
   /** The user fixed the rung by hand; the ladder only observes. */
   pinned: boolean
   turnId: string | null
@@ -56,7 +60,7 @@ export type RunState = {
 
 export type LadderEvent = {
   at: number
-  kind: 'escalate' | 'deescalate' | 'loop' | 'review' | 'milestone' | 'breaker' | 'manual' | 'hold'
+  kind: 'escalate' | 'deescalate' | 'loop' | 'review' | 'milestone' | 'breaker' | 'manual' | 'hold' | 'reset'
   from?: number
   to?: number
   reason: string

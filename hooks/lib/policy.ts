@@ -1,4 +1,16 @@
-import type { Policy, RunState, Tier } from '../../types'
+import type { Effort, Policy, RunState, Tier } from '../../types'
+
+const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
+
+/**
+ * Review cascade: work is judged by a heavier tier than the heaviest one that
+ * produced it, and never lighter than the policy's reviewerTier. Work done on
+ * the oracle can only be reviewed by the oracle.
+ */
+export function pickReviewer(peakTier: number, p: Policy): number {
+  const top = p.tiers.length - 1
+  return Math.min(top, Math.max(p.review.reviewerTier, peakTier + 1))
+}
 
 /**
  * turn.step names the model verbatim; unlike $.model.complete it is not
@@ -65,17 +77,23 @@ export const DEFAULT_PRESET = 'balanced'
 export function normalizePolicy(raw: unknown): Policy {
   const base = PRESETS[DEFAULT_PRESET]!
   const p = (raw && typeof raw === 'object' ? raw : {}) as Partial<Policy>
-  const tiers = (Array.isArray(p.tiers) && p.tiers.length >= 2 ? p.tiers : base.tiers).map(t => ({
-    ...t,
-    model: resolveModel(t.model),
-  }))
+  // Repair each tier: a stored policy with a missing model or a bad effort would
+  // otherwise crash session.start or get every request rejected.
+  const repaired = (Array.isArray(p.tiers) ? p.tiers : []).flatMap((t, i): Tier[] => {
+    if (!t || typeof t !== 'object' || typeof t.model !== 'string' || !t.model.trim()) return []
+    const effort = EFFORTS.includes(t.effort) ? t.effort : 'medium'
+    return [{ id: typeof t.id === 'string' && t.id ? t.id : `tier${i}`, model: resolveModel(t.model), effort }]
+  })
+  const tiers = repaired.length >= 2 ? repaired : base.tiers.map(t => ({ ...t }))
   const top = tiers.length - 1
   const clamp = (n: unknown, lo: number, hi: number, d: number) =>
+    typeof n === 'number' && Number.isFinite(n) ? Math.round(Math.min(hi, Math.max(lo, n))) : d
+  const clampFrac = (n: unknown, lo: number, hi: number, d: number) =>
     typeof n === 'number' && Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d
   return {
     tiers,
     baseTier: clamp(p.baseTier, 0, top, base.baseTier),
-    confidenceThreshold: clamp(p.confidenceThreshold, 0, 1, base.confidenceThreshold),
+    confidenceThreshold: clampFrac(p.confidenceThreshold, 0, 1, base.confidenceThreshold),
     maxStepsPerTier: clamp(p.maxStepsPerTier, 1, 1000, base.maxStepsPerTier),
     errorStreak: clamp(p.errorStreak, 1, 50, base.errorStreak),
     cooldownSteps: clamp(p.cooldownSteps, 1, 100, base.cooldownSteps),
@@ -83,7 +101,8 @@ export function normalizePolicy(raw: unknown): Policy {
     maxStepsPerTask: clamp(p.maxStepsPerTask, 5, 2000, base.maxStepsPerTask),
     loop: {
       repeat: clamp(p.loop?.repeat, 2, 20, base.loop.repeat),
-      pingPong: clamp(p.loop?.pingPong, 2, 20, base.loop.pingPong),
+      // the detector's ring holds 26 calls and ping-pong needs 2 per repeat
+      pingPong: clamp(p.loop?.pingPong, 2, 12, base.loop.pingPong),
       sameError: clamp(p.loop?.sameError, 2, 20, base.loop.sameError),
     },
     review: {
@@ -101,6 +120,8 @@ export function freshRun(policy: Policy, enabled = true): RunState {
   return {
     enabled,
     tier: policy.baseTier,
+    peakTier: policy.baseTier,
+    reviewedToolCalls: 0,
     pinned: false,
     turnId: null,
     stepsOnTier: 0,

@@ -27,7 +27,8 @@ export function hash(s: string): string {
 
 /** What counts as "the same call": tool plus arguments, whitespace-normalised. */
 export function signature(tool: string, input: Record<string, unknown>): string {
-  const { tool_use_id: _a, agentId: _b, consent: _c, ...args } = input
+  // description/timeout are prose or tuning, not identity: a model rewords them when it repeats a call.
+  const { tool_use_id: _a, agentId: _b, consent: _c, description: _d, timeout: _e, ...args } = input
   const norm: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(args)) {
     norm[k] = typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : v
@@ -35,13 +36,18 @@ export function signature(tool: string, input: Record<string, unknown>): string 
   return `${tool}:${hash(stable(norm))}`
 }
 
-/** An error's identity: digits/paths/hex stripped so "line 41" and "line 52" match. */
+/**
+ * An error's identity: digits, paths and hex stripped so "line 41" and "line 52"
+ * match. Keys on the tail, where the failure is, not on a leading banner.
+ */
 export function errorKey(text: string): string {
   return hash(
     text
-      .slice(0, 400)
+      .slice(-400)
       .toLowerCase()
       .replace(/0x[0-9a-f]+/g, '#')
+      .replace(/[a-z]:\\[^\s'"]*|(?:\/[\w.-]+){2,}/g, '<path>')
+      .replace(/\b[0-9a-f]{7,}\b/g, '#')
       .replace(/\d+/g, '#')
       .replace(/\s+/g, ' '),
   )
@@ -55,7 +61,7 @@ export function errorKey(text: string): string {
  */
 export class LoopDetector {
   private ring: Seen[] = []
-  constructor(private readonly cap = 24) {}
+  constructor(private readonly cap = 26) {}
 
   push(s: Seen): void {
     this.ring.push(s)
@@ -102,7 +108,8 @@ export class LoopDetector {
       const w = r.slice(n - span)
       const a = w[0]!.sig
       const b = w[1]!.sig
-      if (a !== b && w.every((x, i) => x.sig === (i % 2 === 0 ? a : b))) {
+      // Results must repeat too: polling a starting server alternates two calls with changing output.
+      if (a !== b && w.every((x, i) => x.sig === (i % 2 === 0 ? a : b) && x.resultHash === w[i % 2]!.resultHash)) {
         return { kind: 'pingpong', detail: `alternating between two calls ${cfg.pingPong}x` }
       }
     }

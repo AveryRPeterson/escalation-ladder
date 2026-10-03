@@ -34,18 +34,19 @@ export function decide(sig: Signal, run: RunState, p: Policy): Move {
   let why = ''
 
   switch (sig.kind) {
-    case 'model-request':
-      if (sig.ask !== 'deeper-reasoning' && sig.confidence >= p.confidenceThreshold) {
-        return {
-          op: 'hold',
-          reason: `confidence ${sig.confidence.toFixed(2)} >= ${p.confidenceThreshold}`,
-        }
+    case 'model-request': {
+      // Models report 0-1 but sometimes percent (40); NaN reads as no confidence.
+      const raw = Number.isFinite(sig.confidence) ? sig.confidence : 0
+      const conf = Math.min(1, Math.max(0, raw > 1 ? raw / 100 : raw))
+      if (sig.ask === 'stuck' && conf >= p.confidenceThreshold) {
+        return { op: 'hold', reason: `confidence ${conf.toFixed(2)} >= ${p.confidenceThreshold}` }
       }
       // "deeper reasoning" and "high stakes" skip the rungs: the cheap
       // tiers were never going to supply it.
       want = sig.ask === 'stuck' ? run.tier + 1 : top(p)
-      why = `model asked (${sig.ask}, confidence ${sig.confidence.toFixed(2)}): ${sig.reason}`
+      why = `model asked (${sig.ask}, confidence ${conf.toFixed(2)}): ${sig.reason}`
       break
+    }
     case 'loop':
       want = run.tier + 1
       why = `loop: ${sig.detail}`
@@ -76,17 +77,12 @@ export function decide(sig: Signal, run: RunState, p: Policy): Move {
   const to = Math.min(want, top(p))
 
   if (to <= run.tier || outOfBudget) {
-    // Nowhere to go. A model's own request or a failed review at the top is
-    // just information; a loop/stall at the top is a reason to stop.
-    if (sig.kind === 'model-request' || sig.kind === 'review-failed') {
-      return { op: 'hold', reason: atTop ? 'already at oracle' : 'escalation budget spent' }
-    }
-    return {
-      op: 'trip',
-      reason: atTop
-        ? `${why}; already at the top tier`
-        : `${why}; escalation budget (${p.maxEscalationsPerTask}) spent`,
-    }
+    // Nowhere to go. Only a loop is proof of no progress. A model's request, a
+    // failed review, a truncated or refused reply, a stall or an error streak at
+    // the top are ordinary work and just hold; maxStepsPerTask still caps a stall.
+    const reason = atTop ? 'already at oracle' : `escalation budget (${p.maxEscalationsPerTask}) spent`
+    if (sig.kind !== 'loop') return { op: 'hold', reason: `${why}; ${reason}` }
+    return { op: 'trip', reason: `${why}; ${reason}` }
   }
   return { op: 'up', to, reason: why }
 }

@@ -5,7 +5,7 @@ import type { Effort, LadderEvent, Policy, RunState, Tier } from '../types'
 import { decide, shouldStepDown } from './lib/decide'
 import type { Signal } from './lib/decide'
 import { LoopDetector, errorKey, hash, signature } from './lib/loop'
-import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy } from './lib/policy'
+import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy, pickReviewer } from './lib/policy'
 import { REVIEW_SYSTEM, buildEvidence, parseVerdict } from './lib/review'
 import type { Verdict } from './lib/review'
 
@@ -92,6 +92,7 @@ async function moveTier($: Eng, to: number, kind: 'escalate' | 'deescalate' | 'm
   await update($, run$, r => ({
     ...r,
     tier: next,
+    peakTier: Math.max(r.peakTier ?? 0, next),
     stepsOnTier: 0,
     cleanSteps: 0,
     errorStreak: 0,
@@ -140,7 +141,8 @@ async function apply($: Eng, sig: Signal) {
 
 async function runReview($: Eng, scope: 'task' | 'milestone', note?: string): Promise<Verdict> {
   const p = await read($, policy$)
-  const tier = p.tiers[p.review.reviewerTier] ?? p.tiers[p.tiers.length - 1]!
+  const run = await read($, run$)
+  const tier = p.tiers[pickReviewer(run.peakTier ?? run.tier, p)] ?? p.tiers[p.tiers.length - 1]!
   const rows = await $.session.messages()
   const r = await $.model.complete({
     model: tier.model,
@@ -201,7 +203,17 @@ export const register: Register = on => {
     const policy = normalizePolicy(stored ?? PRESETS[DEFAULT_PRESET])
     await update($, policy$, () => policy)
     const cur = await read($, run$)
-    await update($, run$, () => ({ ...freshRun(policy, cur.enabled), spend: cur.spend }))
+    // A hot reload re-runs session.start. Keep the task (pin, breaker, turnId,
+    // budgets) and only re-fit the tier to the possibly changed policy; the task
+    // resets on the next user prompt, not on a code edit. Fields added by newer
+    // versions come from freshRun so an older stored run still works.
+    const top = policy.tiers.length - 1
+    await update($, run$, () => ({
+      ...freshRun(policy, cur.enabled),
+      ...cur,
+      tier: Math.min(Math.max(cur.tier ?? policy.baseTier, 0), top),
+      peakTier: Math.min(Math.max(cur.peakTier ?? cur.tier ?? policy.baseTier, 0), top),
+    }))
 
     await $.command.register({
       name: 'ladder',
@@ -265,6 +277,7 @@ export const register: Register = on => {
         tier: r.pinned ? r.tier : p.baseTier,
         spend: r.spend,
       }))
+      await logEvent($, { kind: 'reset', reason: 'new user prompt' })
       await refreshStatus($)
     }
     return next(e)
@@ -468,13 +481,18 @@ export const register: Register = on => {
     if (!run.enabled || !wants || run.isBroken) return base
     if (run.toolCallsInTask < p.review.minToolCalls) return base
     if (run.reviewRounds >= p.review.maxRounds) return base
+    // Nothing was done since the last review (the model just answered the rejection in words).
+    if (run.toolCallsInTask <= (run.reviewedToolCalls ?? 0)) return base
 
-    await update($, run$, r => ({ ...r, reviewRounds: r.reviewRounds + 1 }))
+    const lastRound = run.reviewRounds + 1 >= p.review.maxRounds
+    await update($, run$, r => ({ ...r, reviewRounds: r.reviewRounds + 1, reviewedToolCalls: r.toolCallsInTask }))
     const v = await runReview($, 'task')
     await logEvent($, { kind: 'review', reason: `task ${v.verdict}${v.issues.length ? `: ${v.issues[0]}` : ''}` })
 
     if (v.verdict === 'fail') {
       await apply($, { kind: 'review-failed', issues: v.issues.join('; ') })
+      // On the last allowed round a rework could never be reviewed, so report the failure instead of looping on it.
+      if (lastRound) return { ...base, text: `${base.text}\n\nReview: FAIL (final round, not resubmitted): ${v.issues.join('; ')}` }
       void $.prompt.submit({
         text:
           `[${NAME}] An independent reviewer rejected your last answer:\n${v.issues.map(i => `- ${i}`).join('\n')}\n` +

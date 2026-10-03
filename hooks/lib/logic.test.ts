@@ -24,9 +24,9 @@ describe('loop detector', () => {
     for (let i = 0; i < 3; i++) e.push(seen('a', 'same'))
     expect(e.check(P.loop)?.kind).toBe('repeat')
   })
-  test('A/B alternation trips', () => {
+  test('A/B alternation with repeating results trips', () => {
     const d = new LoopDetector()
-    for (let i = 0; i < 6; i++) d.push(seen(i % 2 ? 'b' : 'a', String(i)))
+    for (let i = 0; i < 6; i++) d.push(seen(i % 2 ? 'b' : 'a', i % 2 ? 'rb' : 'ra'))
     expect(d.check(P.loop)?.kind).toBe('pingpong')
   })
   test('same error across different calls trips', () => {
