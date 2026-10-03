@@ -1,6 +1,6 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
-
+ 
 import type { Effort, LadderEvent, Policy, RunState, Tier } from '../types'
 import { decide, shouldStepDown } from './lib/decide'
 import type { Signal } from './lib/decide'
@@ -214,6 +214,10 @@ export const register: Register = on => {
       tier: Math.min(Math.max(cur.tier ?? policy.baseTier, 0), top),
       peakTier: Math.min(Math.max(cur.peakTier ?? cur.tier ?? policy.baseTier, 0), top),
     }))
+    await logEvent($, {
+      kind: 'reload',
+      reason: `session.start: kept task state (pinned=${cur.pinned}, broken=${cur.isBroken}, tier=${cur.tier})`,
+    })
 
     await $.command.register({
       name: 'ladder',

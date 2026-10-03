@@ -60,7 +60,7 @@ export type RunState = {
 
 export type LadderEvent = {
   at: number
-  kind: 'escalate' | 'deescalate' | 'loop' | 'review' | 'milestone' | 'breaker' | 'manual' | 'hold' | 'reset'
+  kind: 'escalate' | 'deescalate' | 'loop' | 'review' | 'milestone' | 'breaker' | 'manual' | 'hold' | 'reset' | 'reload'
   from?: number
   to?: number
   reason: string
