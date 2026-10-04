@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Effort, LadderEvent, Policy, RunState, Tier } from '../types'
 import { decide, shouldStepDown } from './lib/decide'
 import type { Signal } from './lib/decide'
-import { HELP, applySet, applyTier, formatStatus, listSettings, listTiers } from './lib/commands'
+import { HELP, SETTINGS, STEPPERS, applySet, applyTier, formatStatus, gaugeSvg, listSettings, listTiers } from './lib/commands'
 import { LoopDetector, errorKey, hash, signature } from './lib/loop'
 import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy, pickReviewer, startsNewTask } from './lib/policy'
 import { REVIEW_SYSTEM, buildEvidence, parseVerdict } from './lib/review'
@@ -165,6 +165,34 @@ async function savePolicy($: Eng, p: Policy, resetTier = false) {
   await update($, run$, r =>
     r.pinned ? r : { ...r, tier: resetTier ? n.baseTier : Math.min(r.tier, n.tiers.length - 1), stepsOnTier: 0, cleanSteps: 0 },
   )
+  await refreshStatus($)
+}
+
+/** What a tap on the Button-only pane does. Same effects as the matching /ladder subcommands. */
+async function doAction($: Eng, action: string, arg = '') {
+  const p = await read($, policy$)
+  const run = await read($, run$)
+  if (action === 'up' || action === 'down') {
+    await update($, run$, r => ({ ...r, pinned: true }))
+    await moveTier($, run.tier + (action === 'up' ? 1 : -1), 'manual', 'manual')
+  } else if (action === 'pin') {
+    await update($, run$, r => ({ ...r, pinned: !r.pinned }))
+  } else if (action === 'power') {
+    await update($, run$, r => ({ ...r, enabled: !r.enabled }))
+  } else if (action === 'reset') {
+    detectors.clear()
+    await update($, run$, r => ({ ...freshRun(p, r.enabled), spend: r.spend }))
+  } else if (action === 'preset') {
+    const preset = PRESETS[arg]
+    if (preset) await savePolicy($, preset, true)
+  } else if (action === 'step') {
+    const [key = '', delta = '0'] = arg.split(':')
+    const s = SETTINGS[key]
+    if (s) {
+      const r = applySet(p, key, String(Number(s.get(p)) + Number(delta)))
+      if (r.ok) await savePolicy($, r.policy)
+    }
+  }
   await refreshStatus($)
 }
 
@@ -517,11 +545,13 @@ export const register: Register = on => {
     const p = await read($, policy$)
     switch (cmd) {
       case '':
-      case 'pane':
         // A phone or web client (bridge) may not draw the pane, so answer in text it always renders.
-        if (e.origin.kind === 'bridge') return { text: `${formatStatus(run, p)}\n\n${HELP}` }
+        if (e.origin.kind === 'bridge') return { text: `${formatStatus(run, p)}\n\n${HELP}\n\n(/ladder pane tries the tap-to-control pane.)` }
         await openPane($)
         return { text: 'Ladder pane opened. (/ladder status or /ladder help for text.)' }
+      case 'pane':
+        await openPane($)
+        return { text: `Pane requested from ${e.origin.kind}. If nothing appears on this device, use /ladder status and the text commands.` }
       case 'status':
         return { text: formatStatus(run, p) }
       case 'help':
@@ -610,14 +640,50 @@ export const register: Register = on => {
     const log = await read($, log$)
 
     if (e.surface === 'mobile') {
-      // No text fields or selects on mobile: show state, edit with /ladder.
+      // No text fields or selects on mobile: taps and -/+ steppers instead; anything else via /ladder.
       const m = $.ui.resolve(e)
+      const state = !run.enabled ? 'OFF' : run.isBroken ? 'STOPPED (breaker)' : run.pinned ? 'pinned' : 'auto'
       return (
-        <m.Box flexDirection="column">
+        <m.Box flexDirection="column" gap={1}>
           <m.Text bold>
-            Ladder {run.enabled ? (run.isBroken ? 'STOPPED' : 'on') : 'off'}: {label(p.tiers[run.tier])}
+            Ladder {state}: {label(p.tiers[run.tier])}
           </m.Text>
-          <m.Text dimColor>Edit the policy from a desktop or terminal surface, or with /ladder preset.</m.Text>
+          <m.Svg
+            source={gaugeSvg(p, run)}
+            alt={`Rung ${run.tier} of ${p.tiers.length - 1}: ${p.tiers[run.tier]?.id ?? '?'}`}
+            width={320}
+          />
+          <m.Text>
+            task {run.stepsInTask}/{p.maxStepsPerTask} steps, esc {run.escalations}/{p.maxEscalationsPerTask}, loops {run.loopStrikes}/3, review {run.reviewRounds}/{p.review.maxRounds}
+          </m.Text>
+          <m.Box gap={1}>
+            <m.Button key="m-up" label="Up" onPress={() => { void doAction($, 'up') }} />
+            <m.Button key="m-down" label="Down" onPress={() => { void doAction($, 'down') }} />
+            <m.Button key="m-pin" label={run.pinned ? 'Unpin' : 'Pin'} onPress={() => { void doAction($, 'pin') }} />
+            <m.Button key="m-power" label={run.enabled ? 'Turn off' : 'Turn on'} onPress={() => { void doAction($, 'power') }} />
+            <m.Button key="m-reset" label="Reset" onPress={() => { void doAction($, 'reset') }} />
+          </m.Box>
+          <m.Box gap={1}>
+            <m.Button key="m-p-frugal" label="Frugal" onPress={() => { void doAction($, 'preset', 'frugal') }} />
+            <m.Button key="m-p-balanced" label="Balanced" onPress={() => { void doAction($, 'preset', 'balanced') }} />
+            <m.Button key="m-p-cautious" label="Cautious" onPress={() => { void doAction($, 'preset', 'cautious') }} />
+          </m.Box>
+          {STEPPERS.map(st => (
+            <m.Box key={`s-${st.key}`} gap={1}>
+              <m.Button key={`s-${st.key}-minus`} label="-" onPress={() => { void doAction($, 'step', `${st.key}:${-st.step}`) }} />
+              <m.Button key={`s-${st.key}-plus`} label="+" onPress={() => { void doAction($, 'step', `${st.key}:${st.step}`) }} />
+              <m.Text>
+                {st.key} = {String(SETTINGS[st.key]!.get(p))}
+              </m.Text>
+            </m.Box>
+          ))}
+          <m.Text dimColor>Recent events</m.Text>
+          {log.slice(-6).map((ev, i) => (
+            <m.Text key={`ev${i}`} dimColor>
+              {new Date(ev.at).toISOString().slice(5, 16).replace('T', ' ')} {ev.kind}: {ev.reason.slice(0, 80)}
+            </m.Text>
+          ))}
+          <m.Text dimColor>Rungs and other settings: /ladder tier, /ladder set, /ladder help</m.Text>
         </m.Box>
       )
     }

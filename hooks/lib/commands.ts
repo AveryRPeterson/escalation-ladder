@@ -119,3 +119,33 @@ export function formatStatus(run: RunState, p: Policy): string {
   }
   return lines.join('\n')
 }
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** Tier ladder as a small SVG (top = oracle), the current rung highlighted. For surfaces with no fields. */
+export function gaugeSvg(p: Policy, run: RunState): string {
+  const rowH = 30
+  const w = 320
+  const h = p.tiers.length * rowH + 8
+  const rows = [...p.tiers.keys()].reverse().map((i, row) => {
+    const t = p.tiers[i]!
+    const y = 4 + row * rowH
+    const now = i === run.tier
+    const text = `${i} ${t.id}  ${t.model.replace('claude-', '')} / ${t.effort}${now ? '  <' : ''}`
+    return (
+      `<rect x="4" y="${y}" width="${w - 8}" height="${rowH - 6}" rx="6" fill="${now ? '#2e7d32' : '#78909c'}" opacity="${now ? 1 : 0.6}"/>` +
+      `<text x="14" y="${y + (rowH - 6) / 2 + 5}" font-family="sans-serif" font-size="14" fill="#ffffff">${esc(text)}</text>`
+    )
+  })
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${rows.join('')}</svg>`
+}
+
+/** Settings that get a - / + stepper on the Button-only pane, with the step each press takes. */
+export const STEPPERS: { key: string; step: number }[] = [
+  { key: 'cooldown', step: 1 },
+  { key: 'maxEscalations', step: 1 },
+  { key: 'stepsPerTier', step: 5 },
+  { key: 'errorStreak', step: 1 },
+  { key: 'reviewRounds', step: 1 },
+  { key: 'reviewMinCalls', step: 1 },
+]

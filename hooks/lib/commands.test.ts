@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { HELP, SETTINGS, applySet, applyTier, formatStatus, listSettings, listTiers } from './commands'
+import { HELP, SETTINGS, STEPPERS, applySet, applyTier, formatStatus, gaugeSvg, listSettings, listTiers } from './commands'
 import { PRESETS, freshRun } from './policy'
 
 const P = PRESETS.balanced!
@@ -82,6 +82,28 @@ describe('/ladder status and help', () => {
   test('help names every subcommand', () => {
     for (const c of ['status', 'on', 'off', 'probe', 'log', 'up', 'down', 'pin', 'unpin', 'reset', 'preset', 'get', 'set', 'tier']) {
       expect(HELP.split(/\W+/)).toContain(c)
+    }
+  })
+})
+
+describe('button-only pane pieces', () => {
+  test('gauge is well-formed SVG with one highlighted rung and escaped text', () => {
+    const svg = gaugeSvg(P, { ...freshRun(P), tier: 2 })
+    expect(svg.startsWith('<svg ')).toBe(true)
+    expect(svg.endsWith('</svg>')).toBe(true)
+    expect((svg.match(/#2e7d32/g) ?? []).length).toBe(1)
+    expect((svg.match(/<rect /g) ?? []).length).toBe(P.tiers.length)
+    const odd = gaugeSvg({ ...P, tiers: P.tiers.map((t, i) => (i === 0 ? { ...t, id: 'a<b&c' } : t)) }, freshRun(P))
+    expect(odd).toContain('a&lt;b&amp;c')
+    expect(svg.length).toBeLessThan(131072)
+  })
+  test('every stepper key is a real setting and a step stays within its clamps', () => {
+    for (const s of STEPPERS) {
+      expect(SETTINGS[s.key]).toBeDefined()
+      const cur = Number(SETTINGS[s.key]!.get(P))
+      expect(applySet(P, s.key, String(cur + s.step)).ok).toBe(true)
+      const down = applySet(P, s.key, String(cur - 1000))
+      expect(down.ok).toBe(true)
     }
   })
 })
