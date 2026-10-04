@@ -116,6 +116,14 @@ export function normalizePolicy(raw: unknown): Policy {
   }
 }
 
+/**
+ * Only a person's (or a schedule's) new request starts a new task. Notifications,
+ * peer/subagent hand-backs, relays and the ladder's own follow-ups continue the
+ * task in flight, so they must not clear loop strikes, the breaker or review rounds.
+ */
+const NEW_TASK_ORIGINS = ['composer', 'bridge', 'sdk', 'channel', 'slack-ping', 'auto-continuation', 'scheduled-trigger']
+export const startsNewTask = (originKind: string): boolean => NEW_TASK_ORIGINS.includes(originKind)
+
 export function freshRun(policy: Policy, enabled = true): RunState {
   return {
     enabled,

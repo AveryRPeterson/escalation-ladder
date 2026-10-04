@@ -5,7 +5,7 @@ import type { Effort, LadderEvent, Policy, RunState, Tier } from '../types'
 import { decide, shouldStepDown } from './lib/decide'
 import type { Signal } from './lib/decide'
 import { LoopDetector, errorKey, hash, signature } from './lib/loop'
-import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy, pickReviewer } from './lib/policy'
+import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy, pickReviewer, startsNewTask } from './lib/policy'
 import { REVIEW_SYSTEM, buildEvidence, parseVerdict } from './lib/review'
 import type { Verdict } from './lib/review'
 
@@ -270,8 +270,9 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
-    // A plugin-submitted prompt (a review follow-up) continues the task.
-    if (e.origin.kind !== 'plugin') {
+    // Only a new request starts a task; a review follow-up, subagent hand-back or
+    // background-task notification continues the task in flight.
+    if (startsNewTask(e.origin.kind)) {
       const p = await read($, policy$)
       detectors.clear()
       notes.length = 0
@@ -533,8 +534,13 @@ export const register: Register = on => {
         const events = await read($, log$)
         const r = await read($, run$)
         if (events.length === 0) return { text: 'No events yet.' }
+        let prevDay = ''
         const lines = events.map(ev => {
-          const time = new Date(ev.at).toISOString().slice(11, 19)
+          // Times are UTC. Show the date when the day changes so a long session reads in order.
+          const iso = new Date(ev.at).toISOString()
+          const day = iso.slice(0, 10)
+          const time = (day === prevDay ? '' : `${day} `) + iso.slice(11, 19)
+          prevDay = day
           const from = ev.from !== undefined && ev.to !== undefined ? `${ev.from}→${ev.to} ` : ''
           return `${time} ${ev.kind.padEnd(10)} ${from}${ev.reason}`
         })

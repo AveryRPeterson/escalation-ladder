@@ -10,6 +10,6 @@ test('/ladder log reports an empty log, then the events a manual move records', 
   await $.command.run({ command: 'ladder', args: 'up', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })
   const out = await $.command.run({ command: 'ladder', args: 'log', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })
   expect(out.text).toContain('Recent events:')
-  expect(out.text).toMatch(/18:30:05 manual\s+\d→\d manual/)
+  expect(out.text).toMatch(/2026-10-02 18:30:05 manual\s+\d→\d manual/)
   expect(out.text).toContain('Task status:')
 })

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { decide } from './decide'
 import { LoopDetector, errorKey, signature } from './loop'
-import { PRESETS, freshRun, normalizePolicy, pickReviewer } from './policy'
+import { PRESETS, freshRun, normalizePolicy, pickReviewer, startsNewTask } from './policy'
 import { buildEvidence, parseVerdict } from './review'
 
 const P = PRESETS.balanced!
@@ -134,5 +134,18 @@ describe('buildEvidence hardening', () => {
   test('a tool use without input does not throw', () => {
     const rows = [row('user', 't'), { role: 'assistant' as const, text: 'a', toolUses: [{ tool: 'X' } as never] }]
     expect(() => buildEvidence(rows, 'task')).not.toThrow()
+  })
+})
+
+describe('what starts a new task', () => {
+  test('a person, bridge, SDK or schedule starts one', () => {
+    for (const k of ['composer', 'bridge', 'sdk', 'channel', 'slack-ping', 'auto-continuation', 'scheduled-trigger']) {
+      expect(startsNewTask(k)).toBe(true)
+    }
+  })
+  test('hand-backs, notifications and the ladder own follow-ups continue the task', () => {
+    for (const k of ['plugin', 'task-notification', 'peer', 'peer-send-message', 'projects-relay', 'coordinator', 'observer', 'observer-activity', 'unclassified']) {
+      expect(startsNewTask(k)).toBe(false)
+    }
   })
 })
