@@ -107,3 +107,13 @@ describe('button-only pane pieces', () => {
     }
   })
 })
+
+describe('ask telemetry', () => {
+  test('status shows request and consult counts, tolerating a run stored before they existed', () => {
+    expect(formatStatus({ ...freshRun(P), escalationRequests: 3, consults: 2 }, P)).toContain('3 escalation requests, 2 oracle consults')
+    const old = { ...freshRun(P) } as Record<string, unknown>
+    delete old.escalationRequests
+    delete old.consults
+    expect(formatStatus(old as never, P)).toContain('0 escalation requests, 0 oracle consults')
+  })
+})

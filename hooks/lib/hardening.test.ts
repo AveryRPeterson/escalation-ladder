@@ -155,3 +155,17 @@ describe('what starts a new task', () => {
     }
   })
 })
+
+describe('model requests are hints, behaviour is the evidence', () => {
+  const ask = { kind: 'model-request', confidence: 0.95, ask: 'stuck', reason: 'sure' } as const
+  test('high confidence excuses a request while the run looks healthy', () => {
+    expect(decide(ask, run({ tier: 1 }), P).op).toBe('hold')
+  })
+  test('high confidence does not excuse it after an error streak or a loop strike', () => {
+    expect(decide(ask, run({ tier: 1, errorStreak: 2 }), P).op).toBe('up')
+    expect(decide(ask, run({ tier: 1, loopStrikes: 1 }), P).op).toBe('up')
+  })
+  test('low confidence always escalates', () => {
+    expect(decide({ ...ask, confidence: 0.1 }, run({ tier: 1 }), P).op).toBe('up')
+  })
+})

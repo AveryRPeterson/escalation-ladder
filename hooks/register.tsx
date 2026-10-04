@@ -453,6 +453,7 @@ export const register: Register = on => {
   on('tool.call', { tool: 'mcp__escalation-ladder__request_escalation' }, async ($, e) => {
     const a = e as unknown as { confidence?: number; ask?: string; reason?: string }
     const ask = a.ask === 'deeper-reasoning' || a.ask === 'high-stakes' ? a.ask : 'stuck'
+    await update($, run$, r => ({ ...r, escalationRequests: (r.escalationRequests ?? 0) + 1 }))
     const move = await apply($, {
       kind: 'model-request',
       confidence: typeof a.confidence === 'number' ? a.confidence : 0,
@@ -469,6 +470,7 @@ export const register: Register = on => {
 
   on('tool.call', { tool: 'mcp__escalation-ladder__consult_oracle' }, async ($, e) => {
     const q = String((e as unknown as { question?: string }).question ?? '')
+    await update($, run$, r => ({ ...r, consults: (r.consults ?? 0) + 1 }))
     const p = await read($, policy$)
     const tier = p.tiers[p.tiers.length - 1]!
     const rows = await $.session.messages()

@@ -133,6 +133,8 @@ export function freshRun(policy: Policy, enabled = true): RunState {
     tier: policy.baseTier,
     peakTier: policy.baseTier,
     reviewedToolCalls: 0,
+    escalationRequests: 0,
+    consults: 0,
     pinned: false,
     turnId: null,
     stepsOnTier: 0,

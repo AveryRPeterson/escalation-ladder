@@ -110,6 +110,7 @@ export function formatStatus(run: RunState, p: Policy): string {
     `Escalations ${bar(run.escalations, p.maxEscalationsPerTask)}, loop strikes ${bar(run.loopStrikes, 3)}, error streak ${bar(run.errorStreak, p.errorStreak)}`,
     `Clean steps ${bar(run.cleanSteps, p.cooldownSteps)}${run.tier > p.baseTier && !run.pinned ? ' (steps down at full)' : ''}`,
     `Review: ${p.review.mode}, round ${bar(run.reviewRounds, p.review.maxRounds)}`,
+    `Asks this task: ${run.escalationRequests ?? 0} escalation requests, ${run.consults ?? 0} oracle consults`,
   ]
   if (run.lastLoop) lines.push(`Last loop: ${run.lastLoop}`)
   const spend = Object.entries(run.spend)

@@ -40,6 +40,10 @@ export type RunState = {
   peakTier: number
   /** toolCallsInTask at the last review, so unchanged work is not re-reviewed. */
   reviewedToolCalls: number
+  /** request_escalation calls this task, whatever the outcome (consult-rate telemetry). */
+  escalationRequests: number
+  /** consult_oracle calls this task. */
+  consults: number
   /** The user fixed the rung by hand; the ladder only observes. */
   pinned: boolean
   turnId: string | null

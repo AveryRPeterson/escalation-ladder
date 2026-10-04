@@ -38,7 +38,11 @@ export function decide(sig: Signal, run: RunState, p: Policy): Move {
       // Models report 0-1 but sometimes percent (40); NaN reads as no confidence.
       const raw = Number.isFinite(sig.confidence) ? sig.confidence : 0
       const conf = Math.min(1, Math.max(0, raw > 1 ? raw / 100 : raw))
-      if (sig.ask === 'stuck' && conf >= p.confidenceThreshold) {
+      // Stated confidence skews high and is weakly informative, so it can excuse a
+      // request only while the run looks healthy; an error streak or a loop strike
+      // outweighs it (the request is a hint, behaviour is the evidence).
+      const troubled = run.errorStreak > 0 || run.loopStrikes > 0
+      if (sig.ask === 'stuck' && conf >= p.confidenceThreshold && !troubled) {
         return { op: 'hold', reason: `confidence ${conf.toFixed(2)} >= ${p.confidenceThreshold}` }
       }
       // "deeper reasoning" and "high stakes" skip the rungs: the cheap
