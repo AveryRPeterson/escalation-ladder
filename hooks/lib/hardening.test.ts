@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { decide } from './decide'
 import { LoopDetector, errorKey, signature } from './loop'
-import { PRESETS, freshRun, normalizePolicy, pickReviewer, startsNewTask } from './policy'
+import { PRESETS, freshRun, normalizePolicy, peakAfter, pickReviewer, startsNewTask } from './policy'
 import { buildEvidence, parseVerdict } from './review'
 
 const P = PRESETS.balanced!
@@ -106,6 +106,12 @@ describe('normalizePolicy hardening', () => {
 })
 
 describe('review cascade', () => {
+  test('peak tracks the rung a step ran on, even when it never moved, and tolerates a missing prior value', () => {
+    expect(peakAfter(0, 1)).toBe(1)
+    expect(peakAfter(3, 1)).toBe(3)
+    expect(peakAfter(undefined, 2)).toBe(2)
+    expect(pickReviewer(peakAfter(0, 1), P)).toBe(P.review.reviewerTier)
+  })
   test('reviewer is one rung above the heaviest tier used, never below the policy floor', () => {
     expect(pickReviewer(0, P)).toBe(P.review.reviewerTier)
     expect(pickReviewer(2, P)).toBe(3)

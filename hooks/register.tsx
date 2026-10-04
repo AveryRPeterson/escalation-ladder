@@ -6,7 +6,7 @@ import { decide, shouldStepDown } from './lib/decide'
 import type { Signal } from './lib/decide'
 import { HELP, SETTINGS, STEPPERS, applySet, applyTier, formatStatus, gaugeSvg, listSettings, listTiers } from './lib/commands'
 import { LoopDetector, errorKey, hash, signature } from './lib/loop'
-import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy, pickReviewer, startsNewTask } from './lib/policy'
+import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy, peakAfter, pickReviewer, startsNewTask } from './lib/policy'
 import { REVIEW_SYSTEM, buildEvidence, parseVerdict } from './lib/review'
 import type { Verdict } from './lib/review'
 
@@ -355,6 +355,8 @@ export const register: Register = on => {
     await update($, run$, r => ({
       ...r,
       stepsInTask: r.stepsInTask + 1,
+      // The step ran on `run.tier`, however the rung got there (a pin or /ladder pane included).
+      peakTier: peakAfter(r.peakTier, run.tier),
       ...(movedDuringStep
         ? {}
         : {

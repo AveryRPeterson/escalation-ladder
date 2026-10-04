@@ -7,6 +7,9 @@ const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max']
  * produced it, and never lighter than the policy's reviewerTier. Work done on
  * the oracle can only be reviewed by the oracle.
  */
+/** The heaviest rung a task has run a step on; `prev` may be missing in a run stored by an older version. */
+export const peakAfter = (prev: number | undefined, ranOn: number): number => Math.max(prev ?? 0, ranOn)
+
 export function pickReviewer(peakTier: number, p: Policy): number {
   const top = p.tiers.length - 1
   return Math.min(top, Math.max(p.review.reviewerTier, peakTier + 1))
