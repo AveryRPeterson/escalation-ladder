@@ -52,9 +52,25 @@ Keep `consult_oracle`; do not replace it yet. Run these live checks, in order, t
 
 If 1-3 are clean, the plan is: advisor for planning/consult moments, the ladder for the move-up/move-down decisions, `consult_oracle` demoted to a fallback for non-Anthropic-API setups.
 
+## Live results (2026-10-04)
+
+**Check 1 — advisor attaches and answers on a rewritten rung.**
+- **Passed:** `/advisor opus` + task run at rung 1 (worker: `claude-sonnet-5-5`/medium) attached the advisor and answered on a tool call.
+- **Cost and "Advising" line:** visible only in `/usage` — ask the user for it.
+- **Rung 0 (scout) untested:** the ladder started there, escalated to rung 1 on step 25 (stall heuristic). No advisor call at rung 0.
+
+**Check 2 — advisor survives escalation to oracle.**
+- **Not exercised:** the run peaked at rung 1. Requires `/ladder up` twice to reach oracle (pin the rung), then a single tool call. Then `/ladder unpin`.
+
+**Check 3 — advisor visibility to the mod.**
+- **Inconclusive:** the state read didn't align with the advisor call. Requires a temporary tool.call log as described (point 3 in Recommendation, above).
+
+**Ladder note:** scout → worker escalation on step-count stall (25 steps, healthy metrics: error streak 0, no loops) = false positive of the maxStepsPerTier heuristic on clean iteration. Worth tracking for the spike.
+
 ## Done under issue #9 so far
 
 - A stated confidence no longer vetoes an escalation request once the run shows an error streak or a loop strike (behaviour outranks the hint).
 - Per-task counters for escalation requests and oracle consults, shown in `/ladder status`.
+- Live advisor integration check #1 (attachment and answer on rewritten tier).
 
-Not done: prompt steering (point 5) and the live checks above.
+Not done: prompt steering (point 5), checks #2 and #3, cost details from `/usage`.
