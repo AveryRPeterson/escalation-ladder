@@ -4,6 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Effort, LadderEvent, Policy, RunState, Tier } from '../types'
 import { decide, shouldStepDown } from './lib/decide'
 import type { Signal } from './lib/decide'
+import { HELP, applySet, applyTier, formatStatus, listSettings, listTiers } from './lib/commands'
 import { LoopDetector, errorKey, hash, signature } from './lib/loop'
 import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy, pickReviewer, startsNewTask } from './lib/policy'
 import { REVIEW_SYSTEM, buildEvidence, parseVerdict } from './lib/review'
@@ -222,7 +223,7 @@ export const register: Register = on => {
     await $.command.register({
       name: 'ladder',
       description: 'Model escalation ladder: pane, on/off, up/down, pin, preset <name>, reset',
-      argumentHint: '[on|off|probe|log|up|down|pin|unpin|reset|preset <frugal|balanced|cautious>]',
+      argumentHint: '[status|help|on|off|probe|log|up|down|pin|unpin|reset|preset <name>|get|set <key> <value>|tier <n> <model> <effort>]',
     })
 
     await $.tool.register({
@@ -511,14 +512,38 @@ export const register: Register = on => {
   // ---------- /ladder and the pane ----------
 
   on('command.run', { command: 'ladder' }, async ($, e) => {
-    const [cmd = '', arg = ''] = e.args.trim().split(/\s+/)
+    const [cmd = '', arg = '', arg2, arg3] = e.args.trim().split(/\s+/)
     const run = await read($, run$)
     const p = await read($, policy$)
     switch (cmd) {
       case '':
       case 'pane':
+        // A phone or web client (bridge) may not draw the pane, so answer in text it always renders.
+        if (e.origin.kind === 'bridge') return { text: `${formatStatus(run, p)}\n\n${HELP}` }
         await openPane($)
-        return { text: 'Ladder pane opened.' }
+        return { text: 'Ladder pane opened. (/ladder status or /ladder help for text.)' }
+      case 'status':
+        return { text: formatStatus(run, p) }
+      case 'help':
+      case '--help':
+      case '-h':
+      case '?':
+        return { text: HELP }
+      case 'get':
+        return { text: listSettings(p) }
+      case 'set': {
+        const r = applySet(p, arg, arg2)
+        if (!r.ok) return { text: r.error }
+        await savePolicy($, r.policy, arg === 'baseTier')
+        return { text: `Set ${r.note}` }
+      }
+      case 'tier': {
+        if (arg === '') return { text: listTiers(p, run) }
+        const r = applyTier(p, arg, arg2, arg3)
+        if (!r.ok) return { text: r.error }
+        await savePolicy($, r.policy)
+        return { text: `Set ${r.note}` }
+      }
       case 'on': {
         const bad = await probeTiers($)
         if (bad.length) return { text: `Not turned on; these tiers are unusable:\n${bad.map(b => `- ${b}`).join('\n')}\nFix them in the pane (/ladder), then retry.` }
@@ -575,7 +600,7 @@ export const register: Register = on => {
         return { text: `Preset ${arg} applied.` }
       }
       default:
-        return { text: `Unknown subcommand "${cmd}". Try /ladder for the pane.` }
+        return { text: `Unknown subcommand "${cmd}".\n\n${HELP}` }
     }
   })
 
