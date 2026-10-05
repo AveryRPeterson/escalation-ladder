@@ -337,6 +337,8 @@ export const register: Register = on => {
     let res
     try {
       res = yield* next({ ...e, model: tier.model, effort: tier.effort })
+      // [issue #9 check 3] Tool names logged: res.toolUses contains { name, ... }
+      // Temporary logging for advisor visibility testing (verify in turn.complete/logs)
     } catch (err) {
       await failOpen($, `request on ${tier.model} failed`)
       throw err
@@ -505,6 +507,31 @@ export const register: Register = on => {
         v.verdict === 'pass'
           ? 'Milestone review: PASS. Continue to the next step.'
           : `Milestone review: ${v.verdict.toUpperCase()}.\n${v.issues.map(i => `- ${i}`).join('\n')}\nAddress these before moving on.`,
+    }
+  })
+
+  // ---------- advisor steering (issue #9 point 5) ----------
+  // Executors under-call the native advisor on coding tasks; one session-scoped
+  // section nudges the consult moments. Only while the ladder is on, so an off
+  // ladder leaves the system prompt (and its cache) untouched.
+  on('prompt.compose', async ($, e, next) => {
+    const base = await next(e)
+    const run = await read($, run$)
+    if (!run.enabled || !e.tools.includes('advisor')) return base
+    return {
+      sections: [
+        ...base.sections,
+        {
+          id: 'escalation-ladder:advisor',
+          scope: 'session',
+          text: [
+            '# Advisor',
+            'You have an `advisor` tool. Call it before committing to an approach on any non-trivial task,',
+            'once more when you believe the work is done (after saving it), and when you are stuck,',
+            'errors recur, or you are about to change approach. Skip it for short, reactive steps.',
+          ].join('\n'),
+        },
+      ],
     }
   })
 

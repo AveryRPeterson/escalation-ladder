@@ -96,4 +96,6 @@ The escalation-ladder mod's decision logic is a state machine with complex inter
 - Live advisor integration check #1 (attachment and answer on rewritten tier).
 - Live test infrastructure gaps identified and documented.
 
-Not done: prompt steering (point 5), checks #2 and #3 (blocked by `startsNewTask` design), cost details from `/usage`.
+- Prompt steering (point 5): a `prompt.compose` hook in `register.tsx` appends a short session-scoped "# Advisor" section (consult before approach, before done, when stuck) only while the ladder is on and the `advisor` tool is offered. Passes `claude plugin validate`; **effect on consult rate not measured yet**.
+
+Not done: measuring steering, checks #2 and #3 (blocked by `startsNewTask` design), cost details from `/usage`.
