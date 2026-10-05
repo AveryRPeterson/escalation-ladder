@@ -60,17 +60,40 @@ If 1-3 are clean, the plan is: advisor for planning/consult moments, the ladder 
 - **Rung 0 (scout) untested:** the ladder started there, escalated to rung 1 on step 25 (stall heuristic). No advisor call at rung 0.
 
 **Check 2 — advisor survives escalation to oracle.**
-- **Not exercised:** the run peaked at rung 1. Requires `/ladder up` twice to reach oracle (pin the rung), then a single tool call. Then `/ladder unpin`.
+- **Inconclusive:** pinned oracle (tier 3) but each new user prompt triggers `startsNewTask()`, which resets the task state including the pin. The oracle rung was not maintained through a request. Workaround: a non-user-prompt request (peer/task-notification origin) would preserve the pin, but those are rare in testing.
 
 **Check 3 — advisor visibility to the mod.**
-- **Inconclusive:** the state read didn't align with the advisor call. Requires a temporary tool.call log as described (point 3 in Recommendation, above).
+- **Inconclusive:** oracle rung not reached due to check #2 issue. Temporary logging code is in place (`register.tsx` line ~343). Will activate once check #2 methodology is fixed.
 
 **Ladder note:** scout → worker escalation on step-count stall (25 steps, healthy metrics: error streak 0, no loops) = false positive of the maxStepsPerTier heuristic on clean iteration. Worth tracking for the spike.
+
+**Test infrastructure gap:** The ladder's `startsNewTask()` logic treats `bridge` origin (user prompts) as task-resetting events. This blocks long-running state checks (like pinning to a specific rung and making multiple requests on it). Testing checks #2 and #3 properly requires either:
+1. Mocking `startsNewTask` in a test harness, or
+2. Using non-bridge origins (e.g., peer/subagent hand-offs), or
+3. Running checks in a single integrated test that doesn't cross user-prompt boundaries.
+
+## Testing improvements needed for robust mod validation
+
+The escalation-ladder mod's decision logic is a state machine with complex interactions. Current testing (69 unit tests + manual live checks) misses cross-tier transition coverage. Recommended improvements:
+
+**High priority:**
+- **State-machine property tests:** Generate random sequences of signals (errorStreak, loopStrikes, stepsPerTier, manual pin/unpin) and verify the ladder's response is deterministic and safe (never escalates past breaker, always respects pins, handles cooldown correctly).
+- **Complete checks #2 and #3 with automated assertions:** Fix the `startsNewTask()` boundary issue (either mock it or use non-bridge origins) so oracle rung and advisor visibility can be tested end-to-end in CI, not manually.
+
+**Medium priority:**
+- **Loop detector ring-buffer edge cases:** Verify behavior at ring wraparound (call 27 when cap is 26), mixed trip modes, and state reset during a loop strike.
+- **Step-count stall false-positive measurement:** Property test: run known-healthy task sequences (no errors, no loops, real progress) and measure false-escalation rate to inform threshold tuning.
+
+**Low priority:**
+- **Mock advisor tool for test harness:** Simulate advisor pairing failures and cost overruns without depending on real API calls.
+
+**Root cause of checks #2 and #3 block:** The ladder's `startsNewTask()` resets task state on every user prompt (bridge origin), including tier pins. This is by design for user-facing sessions but breaks multi-request state tests. Solution: either (1) add a test mode where `startsNewTask()` can be mocked, or (2) run checks #2 and #3 in an isolated session that doesn't cross prompt boundaries.
 
 ## Done under issue #9 so far
 
 - A stated confidence no longer vetoes an escalation request once the run shows an error streak or a loop strike (behaviour outranks the hint).
 - Per-task counters for escalation requests and oracle consults, shown in `/ladder status`.
 - Live advisor integration check #1 (attachment and answer on rewritten tier).
+- Live test infrastructure gaps identified and documented.
 
-Not done: prompt steering (point 5), checks #2 and #3, cost details from `/usage`.
+Not done: prompt steering (point 5), checks #2 and #3 (blocked by `startsNewTask` design), cost details from `/usage`.
