@@ -6,7 +6,7 @@ import { decide, shouldStepDown } from './lib/decide'
 import type { Signal } from './lib/decide'
 import { HELP, SETTINGS, STEPPERS, applySet, applyTier, formatStatus, gaugeSvg, listSettings, listTiers } from './lib/commands'
 import { LoopDetector, errorKey, hash, signature } from './lib/loop'
-import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy, peakAfter, pickReviewer, startsNewTask } from './lib/policy'
+import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy, peakAfter, pickReviewer, startsNewTask, setTestModeStartsNewTask } from './lib/policy'
 import { REVIEW_SYSTEM, buildEvidence, parseVerdict } from './lib/review'
 import type { Verdict } from './lib/review'
 
@@ -230,6 +230,13 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const stored = await $.store.get('policy')
     const policy = normalizePolicy(stored ?? PRESETS[DEFAULT_PRESET])
+
+    // Test infrastructure: allow mocking startsNewTask to preserve pin across prompts (issue #9 check #2)
+    if (typeof process !== 'undefined' && process.env.LADDER_TEST_MODE === 'true') {
+      setTestModeStartsNewTask(originKind => originKind !== 'bridge')
+      await logEvent($, { kind: 'config', reason: 'LADDER_TEST_MODE enabled: pin preserved across bridge origins' })
+    }
+
     await update($, policy$, () => policy)
     const cur = await read($, run$)
     // A hot reload re-runs session.start. Keep the task (pin, breaker, turnId,
@@ -337,8 +344,14 @@ export const register: Register = on => {
     let res
     try {
       res = yield* next({ ...e, model: tier.model, effort: tier.effort })
-      // [issue #9 check 3] Tool names logged: res.toolUses contains { name, ... }
-      // Temporary logging for advisor visibility testing (verify in turn.complete/logs)
+      // [issue #9 check 3] Log advisor calls for visibility testing
+      const advisorUses = res.toolUses?.filter((u: { name: string }) => u.name === 'advisor') ?? []
+      if (advisorUses.length > 0) {
+        await logEvent($, {
+          kind: 'tool',
+          reason: `advisor call(s) at tier ${run.tier} (${tier.model}): ${advisorUses.length} use(s)`,
+        })
+      }
     } catch (err) {
       await failOpen($, `request on ${tier.model} failed`)
       throw err

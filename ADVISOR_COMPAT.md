@@ -98,4 +98,7 @@ The escalation-ladder mod's decision logic is a state machine with complex inter
 
 - Prompt steering (point 5): a `prompt.compose` hook in `register.tsx` appends a short session-scoped "# Advisor" section (consult before approach, before done, when stuck) only while the ladder is on and the `advisor` tool is offered. Passes `claude plugin validate`; **effect on consult rate not measured yet**.
 
-Not done: measuring steering, checks #2 and #3 (blocked by `startsNewTask` design), cost details from `/usage`.
+- Test infrastructure improvements for checks #2 and #3: Added LADDER_TEST_MODE env var to mock startsNewTask() for pin persistence testing; added advisor tool.call logging in turn.step hook to event log.
+
+Not done: executing checks #2 and #3 with new infrastructure; measuring steering and #3 (blocked by `startsNewTask` design), cost details from `/usage`.
+
