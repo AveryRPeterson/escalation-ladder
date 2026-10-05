@@ -123,9 +123,26 @@ export function normalizePolicy(raw: unknown): Policy {
  * Only a person's (or a schedule's) new request starts a new task. Notifications,
  * peer/subagent hand-backs, relays and the ladder's own follow-ups continue the
  * task in flight, so they must not clear loop strikes, the breaker or review rounds.
+ *
+ * For testing: set LADDER_TEST_MODE=true to allow bridge origins to be tested
+ * in multi-request sequences without automatic task reset.
  */
 const NEW_TASK_ORIGINS = ['composer', 'bridge', 'sdk', 'channel', 'slack-ping', 'auto-continuation', 'scheduled-trigger']
-export const startsNewTask = (originKind: string): boolean => NEW_TASK_ORIGINS.includes(originKind)
+
+// Test mode: allows mocking startsNewTask behavior. Never enabled in production.
+let testModeStartsNewTask: ((originKind: string) => boolean) | null = null
+
+export function setTestModeStartsNewTask(fn: ((originKind: string) => boolean) | null): void {
+  if (typeof process !== 'undefined' && process.env.LADDER_TEST_MODE !== 'true') {
+    throw new Error('setTestModeStartsNewTask() only allowed when LADDER_TEST_MODE=true')
+  }
+  testModeStartsNewTask = fn
+}
+
+export const startsNewTask = (originKind: string): boolean => {
+  if (testModeStartsNewTask) return testModeStartsNewTask(originKind)
+  return NEW_TASK_ORIGINS.includes(originKind)
+}
 
 export function freshRun(policy: Policy, enabled = true): RunState {
   return {
