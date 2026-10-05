@@ -100,5 +100,8 @@ The escalation-ladder mod's decision logic is a state machine with complex inter
 
 - Test infrastructure improvements for checks #2 and #3: Added LADDER_TEST_MODE env var to mock startsNewTask() for pin persistence testing; added advisor tool.call logging in turn.step hook to event log.
 
-Not done: executing checks #2 and #3 with new infrastructure; measuring steering and #3 (blocked by `startsNewTask` design), cost details from `/usage`.
+**Next steps for checks #2 and #3:**
+- Check #2 (advisor survives oracle escalation): Set `LADDER_TEST_MODE=true`, use `/ladder up` to reach oracle, make a task request, verify advisor is still offered and called.
+- Check #3 (advisor visibility in mod): Same setup; after task completes, run `/ladder log` and search for "advisor call" entries to verify logging.
+- Both checks now have infrastructure in place; no further code changes needed. and #3 (blocked by `startsNewTask` design), cost details from `/usage`.
 
