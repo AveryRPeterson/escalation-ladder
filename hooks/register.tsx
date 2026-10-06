@@ -234,7 +234,7 @@ export const register: Register = on => {
     // Test infrastructure: allow mocking startsNewTask to preserve pin across prompts (issue #9 check #2)
     if (typeof process !== 'undefined' && process.env.LADDER_TEST_MODE === 'true') {
       setTestModeStartsNewTask(originKind => originKind !== 'bridge')
-      await logEvent($, { kind: 'config', reason: 'LADDER_TEST_MODE enabled: pin preserved across bridge origins' })
+      await logEvent($, { kind: 'note', reason: 'LADDER_TEST_MODE enabled: pin preserved across bridge origins' })
     }
 
     await update($, policy$, () => policy)
@@ -344,14 +344,8 @@ export const register: Register = on => {
     let res
     try {
       res = yield* next({ ...e, model: tier.model, effort: tier.effort })
-      // [issue #9 check 3] Log advisor calls for visibility testing
-      const advisorUses = res.toolUses?.filter((u: { name: string }) => u.name === 'advisor') ?? []
-      if (advisorUses.length > 0) {
-        await logEvent($, {
-          kind: 'tool',
-          reason: `advisor call(s) at tier ${run.tier} (${tier.model}): ${advisorUses.length} use(s)`,
-        })
-      }
+      // Advisor consults are server-tool blocks: they are not in res.toolUses and tool.call never
+      // fires for them (see ADVISOR_COMPAT.md, check 3).
     } catch (err) {
       await failOpen($, `request on ${tier.model} failed`)
       throw err
@@ -527,10 +521,26 @@ export const register: Register = on => {
   // Executors under-call the native advisor on coding tasks; one session-scoped
   // section nudges the consult moments. Only while the ladder is on, so an off
   // ladder leaves the system prompt (and its cache) untouched.
+  // The guard assumes a server tool is listed in e.tools under the name "advisor"; that is
+  // unverified, so the outcome is logged once per change and shows in /ladder log.
+  let steering = ''
   on('prompt.compose', async ($, e, next) => {
     const base = await next(e)
     const run = await read($, run$)
-    if (!run.enabled || !e.tools.includes('advisor')) return base
+    if (!run.enabled) return base
+    const offered = e.tools.includes('advisor')
+    const outcome = offered ? 'applied' : 'skipped'
+    if (outcome !== steering) {
+      steering = outcome
+      const near = e.tools.filter(t => /advis/i.test(t))
+      await logEvent($, {
+        kind: 'note',
+        reason: offered
+          ? 'advisor steering: section added to the system prompt'
+          : `advisor steering: skipped, no "advisor" in the request tools (${e.tools.length} tools; advisor-like: ${near.join(',') || 'none'})`,
+      })
+    }
+    if (!offered) return base
     return {
       sections: [
         ...base.sections,
