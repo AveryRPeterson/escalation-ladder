@@ -28,13 +28,33 @@ export const ALIASES: Record<string, string> = {
 
 export const resolveModel = (m: string): string => ALIASES[m.trim().toLowerCase()] ?? m.trim()
 
+// Rung ids are roles on the ladder; the model and effort say what runs there.
+// claude-haiku-4-5 is sent no effort at all (session transcripts record perTurnEffort as
+// null for it, and low/high for sonnet), so a haiku rung's effort is only a label and two
+// haiku rungs would be the same request. Each real preset has at most one.
+export const TIERS_FRUGAL: Tier[] = [
+  { id: 'scout', model: ALIASES.haiku!, effort: 'max' },
+  { id: 'worker', model: ALIASES.sonnet!, effort: 'low' },
+  { id: 'senior', model: ALIASES.sonnet!, effort: 'high' },
+  { id: 'oracle', model: ALIASES.opus!, effort: 'low' },
+]
+
 export const TIERS_BALANCED: Tier[] = [
-  { id: 'scout', model: ALIASES.haiku!, effort: 'medium' },
+  { id: 'scout', model: ALIASES.sonnet!, effort: 'low' },
+  { id: 'worker', model: ALIASES.sonnet!, effort: 'high' },
+  { id: 'senior', model: ALIASES.sonnet!, effort: 'max' },
+  { id: 'oracle', model: ALIASES.opus!, effort: 'high' },
+]
+
+/** The original ladder, kept for `cautious`, which starts on its third rung. */
+export const TIERS_CAUTIOUS: Tier[] = [
+  { id: 'scout', model: ALIASES.haiku!, effort: 'low' },
   { id: 'worker', model: ALIASES.sonnet!, effort: 'medium' },
   { id: 'senior', model: ALIASES.sonnet!, effort: 'high' },
   { id: 'oracle', model: ALIASES.opus!, effort: 'max' },
 ]
 
+/** Two haiku rungs on purpose, to measure what effort changes on a model. Not a ladder to run. */
 export const TIERS_EFFORT_TEST: Tier[] = [
   { id: 'haiku-low', model: ALIASES.haiku!, effort: 'low' },
   { id: 'haiku-high', model: ALIASES.haiku!, effort: 'high' },
@@ -44,7 +64,7 @@ export const TIERS_EFFORT_TEST: Tier[] = [
 
 export const PRESETS: Record<string, Policy> = {
   frugal: {
-    tiers: TIERS_EFFORT_TEST,
+    tiers: TIERS_FRUGAL,
     baseTier: 0,
     confidenceThreshold: 0.5,
     maxStepsPerTier: 25,
@@ -57,7 +77,7 @@ export const PRESETS: Record<string, Policy> = {
   },
   balanced: {
     tiers: TIERS_BALANCED,
-    baseTier: 1,
+    baseTier: 0,
     confidenceThreshold: 0.6,
     maxStepsPerTier: 20,
     errorStreak: 3,
@@ -68,7 +88,7 @@ export const PRESETS: Record<string, Policy> = {
     review: { mode: 'both', reviewerTier: 3, minToolCalls: 3, maxRounds: 2 },
   },
   cautious: {
-    tiers: TIERS_BALANCED,
+    tiers: TIERS_CAUTIOUS,
     baseTier: 2,
     confidenceThreshold: 0.75,
     maxStepsPerTier: 15,
@@ -78,6 +98,19 @@ export const PRESETS: Record<string, Policy> = {
     maxStepsPerTask: 250,
     loop: { repeat: 2, pingPong: 2, sameError: 2 },
     review: { mode: 'both', reviewerTier: 3, minToolCalls: 1, maxRounds: 3 },
+  },
+  // For measurement only: frugal's settings on the two-haiku, two-sonnet effort-test rungs.
+  efforttest: {
+    tiers: TIERS_EFFORT_TEST,
+    baseTier: 0,
+    confidenceThreshold: 0.5,
+    maxStepsPerTier: 25,
+    errorStreak: 4,
+    cooldownSteps: 4,
+    maxEscalationsPerTask: 3,
+    maxStepsPerTask: 150,
+    loop: { repeat: 3, pingPong: 3, sameError: 3 },
+    review: { mode: 'task', reviewerTier: 2, minToolCalls: 3, maxRounds: 1 },
   },
 }
 

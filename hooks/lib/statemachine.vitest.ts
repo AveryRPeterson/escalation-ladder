@@ -350,4 +350,35 @@ describe('Escalation Ladder State Machine', () => {
       expect(detector.check(cfg)).toBeNull()
     })
   })
+
+  describe('Presets', () => {
+    // claude-haiku-4-5 is sent no effort (transcripts record perTurnEffort as null), so only its model identifies the request.
+    const request = (t: { model: string; effort: string }) => (t.model.includes('haiku') ? t.model : `${t.model}/${t.effort}`)
+    const rungs = (name: string) =>
+      PRESETS[name]!.tiers.map(t => `${t.model.replace('claude-', '').replace(/-\d{8}$/, '')}/${t.effort}`)
+
+    it('every preset has a usable shape', () => {
+      for (const [name, p] of Object.entries(PRESETS)) {
+        const top = p.tiers.length - 1
+        expect(p.tiers.length, name).toBeGreaterThanOrEqual(2)
+        expect(p.baseTier, name).toBeLessThanOrEqual(top)
+        expect(p.review.reviewerTier, name).toBeLessThanOrEqual(top)
+      }
+    })
+
+    it('no real preset has two adjacent rungs that are the same request', () => {
+      for (const [name, p] of Object.entries(PRESETS)) {
+        if (name === 'efforttest') continue // two haiku rungs on purpose
+        p.tiers.forEach((t, i) => {
+          if (i > 0) expect(request(t), `${name} rung ${i}`).not.toBe(request(p.tiers[i - 1]!))
+        })
+      }
+    })
+
+    it('frugal and balanced are the ladders they were set to', () => {
+      expect(rungs('frugal')).toEqual(['haiku-4-5/max', 'sonnet-5-5/low', 'sonnet-5-5/high', 'opus-5-5/low'])
+      expect(rungs('balanced')).toEqual(['sonnet-5-5/low', 'sonnet-5-5/high', 'sonnet-5-5/max', 'opus-5-5/high'])
+      expect(PRESETS.balanced!.baseTier).toBe(0)
+    })
+  })
 })

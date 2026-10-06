@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 test('/ladder log reports an empty log, then the events a manual move records', async ($, on) => {
   mock.clock(on, { now: Date.UTC(2026, 9, 2, 18, 30, 5) })
-  on('ui.status', () => undefined as never)
+  on('ui.status', () => ({ value: undefined }) as never)
 
   const empty = await $.command.run({ command: 'ladder', args: 'log', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })
   expect(empty.text).toBe('No events yet.')
@@ -16,7 +16,7 @@ test('/ladder log reports an empty log, then the events a manual move records', 
 
 test('/ladder status, help, set, tier and bridge-origin bare command all answer in text', async ($, on) => {
   mock.clock(on, { now: Date.UTC(2026, 9, 2, 18, 30, 5) })
-  on('ui.status', () => undefined as never)
+  on('ui.status', () => ({ value: undefined }) as never)
   on('store.set', () => ({ value: undefined }) as never)
   const run = (args: string, kind: 'composer' | 'bridge' = 'composer') =>
     $.command.run({ command: 'ladder', args, origin: { kind } as never, presentation: { isFullscreen: false, columns: 80 } })
@@ -33,8 +33,8 @@ test('/ladder status, help, set, tier and bridge-origin bare command all answer 
   expect((await run('set cooldown 7')).text).toBe('Set cooldown = 7')
   expect((await run('get')).text).toContain('cooldown = 7')
   expect((await run('set cooldown nope')).text).toContain('needs a number')
-  expect((await run('tier 0 sonnet low')).text).toContain('rung 0')
+  expect((await run('tier 0 opus high')).text).toContain('rung 0')
   const tiers = (await run('tier')).text ?? ''
-  expect(tiers).toContain('0  scout  claude-sonnet-5-5  low') // the edited rung
-  expect(tiers).toContain('1* worker') // the balanced preset starts on rung 1
+  expect(tiers).toContain('0* scout  claude-opus-5-5  high') // the edited rung; the balanced preset starts on rung 0
+  expect(tiers).toContain('1  worker  claude-sonnet-5-5  high') // the next rung is untouched
 })

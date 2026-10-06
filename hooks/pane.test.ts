@@ -11,8 +11,8 @@ const PANE_PROPS = {
 
 test('the Button-only pane draws on mobile (surface-validated) and taps change state', async ($, on) => {
   mock.clock(on, { now: Date.UTC(2026, 9, 2, 18, 30, 5) })
-  on('ui.status', () => undefined as never)
-  on('ui.toast', () => undefined as never)
+  on('ui.status', () => ({ value: undefined }) as never)
+  on('ui.toast', () => ({ value: undefined }) as never)
   on('store.set', () => ({ value: undefined }) as never)
 
   // Mounting validates the returned tree against the mobile element table: it fails if the

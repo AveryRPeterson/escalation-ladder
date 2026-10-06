@@ -24,7 +24,7 @@ Can a mod run a task on a cheap model/effort by default and move it up to an ora
 
 ## Design
 
-**Ladder.** Ordered tiers, cheapest to strongest, last = oracle. Defaults: `scout` haiku/low, `worker` sonnet/medium, `senior` sonnet/high, `oracle` opus/max. Model aliases are editable per tier in the pane (a full model id works too). A task starts at `baseTier` and decays back to it.
+**Ladder.** Ordered tiers, cheapest to strongest, last = oracle. Rungs by preset: `frugal` haiku/max, sonnet/low, sonnet/high, opus/low; `balanced` sonnet/low, sonnet/high, sonnet/max, opus/high; `cautious` haiku/low, sonnet/medium, sonnet/high, opus/max. Haiku is sent no effort (see Unproven 4), so a haiku rung's effort is only a label. Model aliases are editable per tier in the pane (a full model id works too). A task starts at `baseTier` and decays back to it.
 
 **Task** = one user prompt plus any plugin-submitted review follow-ups. A new user prompt resets counters and the breaker.
 
@@ -47,7 +47,7 @@ Can a mod run a task on a cheap model/effort by default and move it up to an ora
 - *Pinning*: `/ladder up|down|pin` fixes the rung; the ladder then only observes (decisions logged as `hold`), but the 3-strike breaker still applies.
 - *Review*: `task` mode runs a reviewer (own tier, no history, sees task + tool trail + final answer) when a turn ends with at least `minToolCalls` calls; a fail escalates one rung and submits the issues back, up to `maxRounds`. `milestone` mode reviews inside the model's `checkpoint({summary})` call and returns the verdict as the tool result. Reviewer replies `pass|fail|unsure`; `unsure` is treated as pass-with-note, never as a block.
 
-**Presets:** `frugal` (start scout, task review only), `balanced` (start worker, both reviews), `cautious` (start senior, tight thresholds, 3 review rounds).
+**Presets:** `frugal` (start on rung 0, task review only), `balanced` (start on rung 0, both reviews), `cautious` (start on rung 2, tight thresholds, 3 review rounds), and `efforttest` (two haiku and two sonnet rungs, for measuring what effort changes; not for real use).
 
 ## Using it
 

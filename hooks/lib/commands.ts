@@ -19,7 +19,7 @@ export const HELP = [
   '/ladder up | down  move one rung and pin there',
   '/ladder pin | unpin   freeze / release the rung',
   '/ladder reset      clear task counters, breaker and pin',
-  '/ladder preset <frugal|balanced|cautious>',
+  '/ladder preset <frugal|balanced|cautious|efforttest>',
   '/ladder get        list settings and their values',
   '/ladder set <key> <value>   change a setting (see get)',
   '/ladder tier       list rungs',
