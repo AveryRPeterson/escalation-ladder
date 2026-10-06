@@ -92,7 +92,16 @@ Conclusions:
 1. ~~Mid-turn model switch validity~~ settled, see Live finding 2.
 2. **Cache cost of a switch.** Measured once on a ~200K context (Live finding 2). Still to do: the same on a small context, and switch vs. consult side by side, to set the oracle default.
 3. **Self-reported confidence is weakly calibrated.** Treat the heuristic signals (loops, errors, stalls) as primary and the model's number as a hint. Needs a small eval set to tune `confidenceThreshold`.
-4. **Effort support varies by model.** The engine drops effort where unsupported; confirm per tier rather than assuming haiku honours `low`.
+4. ~~Effort support varies by model~~ **settled (2026-10-06): `claude-haiku-4-5` gets no effort at all; `claude-sonnet-5-5` does.** Read from the session transcripts, where each assistant message carries `perTurnEffort`: the haiku-low and haiku-high runs show `None` on every message, the sonnet-low and sonnet-high runs show `low` and `high`. A haiku-low rung and a haiku-high rung are therefore the same request, and escalating between them changes nothing while spending one of the task's escalations. Four runs of one data-analysis prompt (one sample each, so only suggestive on quality):
+
+   | Rung | Output tok | Steps / tool calls | Time | Regional totals right (of 5) |
+   |---|---|---|---|---|
+   | haiku-low | 1,425 | 1 / 0 | 13s | 0 |
+   | haiku-high | 1,457 | 1 / 0 | 14s | 3 |
+   | sonnet-low | 2,222 | 1 / 0 | 16s | 5 |
+   | sonnet-high | 2,331 | 3 / 2 | 22s | 5 (one rounding slip, West +46% for 45%) |
+
+   The haiku-low/haiku-high difference in accuracy is sampling noise, since the requests are identical. Sonnet-high behaved differently from sonnet-low (it ran two shell commands to compute the figures), which is consistent with effort being honoured, but output tokens rose only 5%. Cache-read figures are not comparable across these runs: they track prefix size and cache warmth, not effort.
 5. **Review quality.** The reviewer sees a clipped tool trail, not file diffs. Check it actually catches "claimed tests passed but none ran".
 6. **Milestones depend on the model calling `checkpoint`.** `TodoWrite`/task tools are not in this build's typings, so there is no automatic todo-completion trigger yet.
 

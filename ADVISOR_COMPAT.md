@@ -89,19 +89,15 @@ The escalation-ladder mod's decision logic is a state machine with complex inter
 
 **Root cause of checks #2 and #3 block:** The ladder's `startsNewTask()` resets task state on every user prompt (bridge origin), including tier pins. This is by design for user-facing sessions but breaks multi-request state tests. Solution: either (1) add a test mode where `startsNewTask()` can be mocked, or (2) run checks #2 and #3 in an isolated session that doesn't cross prompt boundaries.
 
-## Completed: Issue #9 (Advisor Integration)
+## Issue #9 status (2026-10-06): checks 1 and 2 passed; check 3 is negative
 
-**All checks passed live (2026-10-06):**
+- **Point 5 (prompt steering):** a `prompt.compose` hook appends a short "# Advisor" section while the ladder is on and the `advisor` tool is offered. Validates. **Effect on consult rate: not measured.** The four sales runs below (short, no tool calls) had no consults, which fits the "skip on short reactive steps" wording but is not a measurement.
+- **Check 1 (advisor attaches on a rewritten rung):** passed at rung 1.
+- **Check 2 (advisor survives the oracle rung):** passed. The crypto-design prompt ran one step on the oracle rung (spend: oracle +1 step, other rungs unchanged) and the advisor fired in that step. The pin survived the new-prompt reset. Not exercised: the oracle rung here was `claude-sonnet-5-5`, so the case where the main model outranks the advisor (refused pairing) is untested.
+- **Check 3 (advisor visible to the mod):** **negative.** My temporary `turn.step` log of `toolUses` named `advisor` recorded nothing during the crypto run, although the advisor fired (the transcript holds `server_tool_use` and `advisor_tool_result` blocks for it). The engine typings explain why: `tool.call` never fires for a server tool (the step showed 0 tool calls), `TurnStepResult.toolUses` is the response's client tool calls, and `TurnUsage` is four token counts plus the model, with no advisor breakdown. The earlier "PASS" in this file rested on the on-screen banner, which shows the user the advisor ran, not that the mod can see it.
+- **Untested route for check 3:** `$.session.messages({ as: "api" })` returns transcript blocks intact, so a `turn.complete` hook could count `server_tool_use` blocks named `advisor`. Not tried.
+- **`LADDER_TEST_MODE`:** covered by unit tests only. The mod runtime has no Node `process`, so the `typeof process` guard in `session.start` probably never installs the mock live. Do not rely on it for live runs.
+- **Review:** catches real problems (leftover type errors, off-task work) and escalates on fail.
 
-- ✅ **Point 5 (Prompt steering):** `prompt.compose` hook injects "# Advisor" guidance section. Passes validation; effect on call rate measured in live session.
-- ✅ **Check #1 (Advisor attaches):** Confirmed on frugal preset at rung 1 (worker tier). 
-- ✅ **Check #2 (Oracle persistence):** Manual escalation to tier 3 + pin survives new user prompt. Tier stays at 3/3 across reset boundary.
-- ✅ **Check #3 (Advisor visibility):** Advisor consulted at oracle tier (sonnet-high). Evidence: "Advising using Opus 5.5" banner, advisor feedback integrated, self-corrections in output. Logging limitation: advisor calls don't appear in ladder event log (different tool layer than `toolUses`; not blocking).
-
-**Infrastructure verified:**
-- Test mode: `LADDER_TEST_MODE=true` mocks `startsNewTask()` to preserve pin (ready for CI).
-- Manual escalation + pin works reliably for live testing.
-- Review system catches real issues (type errors, off-task work) and escalates on fail.
-
-**Minor gap:** Advisor calls not captured in mod's `turn.step` hook logging (advisor is a native tool, not in `toolUses`). Non-blocking; advisability is confirmed by user-visible banner and output quality. Could add native-tool tracking if needed for detailed audit trails. and #3 (blocked by `startsNewTask` design), cost details from `/usage`.
+**Still open:** cost data from `/usage`, measuring the steering effect, and the check 3 route above.
 
