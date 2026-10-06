@@ -29,15 +29,22 @@ export const ALIASES: Record<string, string> = {
 export const resolveModel = (m: string): string => ALIASES[m.trim().toLowerCase()] ?? m.trim()
 
 export const TIERS_BALANCED: Tier[] = [
-  { id: 'scout', model: ALIASES.haiku!, effort: 'low' },
+  { id: 'scout', model: ALIASES.haiku!, effort: 'medium' },
   { id: 'worker', model: ALIASES.sonnet!, effort: 'medium' },
   { id: 'senior', model: ALIASES.sonnet!, effort: 'high' },
   { id: 'oracle', model: ALIASES.opus!, effort: 'max' },
 ]
 
+export const TIERS_EFFORT_TEST: Tier[] = [
+  { id: 'haiku-low', model: ALIASES.haiku!, effort: 'low' },
+  { id: 'haiku-high', model: ALIASES.haiku!, effort: 'high' },
+  { id: 'sonnet-low', model: ALIASES.sonnet!, effort: 'low' },
+  { id: 'sonnet-high', model: ALIASES.sonnet!, effort: 'high' },
+]
+
 export const PRESETS: Record<string, Policy> = {
   frugal: {
-    tiers: TIERS_BALANCED,
+    tiers: TIERS_EFFORT_TEST,
     baseTier: 0,
     confidenceThreshold: 0.5,
     maxStepsPerTier: 25,
