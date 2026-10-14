@@ -60,6 +60,7 @@ If 1-3 are clean, the plan is: advisor for planning/consult moments, the ladder 
 - **Rung 0 (scout) untested:** the ladder started there, escalated to rung 1 on step 25 (stall heuristic). No advisor call at rung 0.
 
 **Check 2 — advisor survives escalation to oracle.**
+- *Correction (2026-10-13): the pin-reset explanation below is wrong. A new prompt keeps the pin and its rung; see the status section at the end.*
 - **Inconclusive:** pinned oracle (tier 3) but each new user prompt triggers `startsNewTask()`, which resets the task state including the pin. The oracle rung was not maintained through a request. Workaround: a non-user-prompt request (peer/task-notification origin) would preserve the pin, but those are rare in testing.
 
 **Check 3 — advisor visibility to the mod.**
@@ -68,6 +69,7 @@ If 1-3 are clean, the plan is: advisor for planning/consult moments, the ladder 
 **Ladder note:** scout → worker escalation on step-count stall (25 steps, healthy metrics: error streak 0, no loops) = false positive of the maxStepsPerTier heuristic on clean iteration. Worth tracking for the spike.
 
 **Test infrastructure gap:** The ladder's `startsNewTask()` logic treats `bridge` origin (user prompts) as task-resetting events. This blocks long-running state checks (like pinning to a specific rung and making multiple requests on it). Testing checks #2 and #3 properly requires either:
+- *Correction (2026-10-13): the pin-reset explanation below is wrong. A new prompt keeps the pin and its rung; see the status section at the end.*
 1. Mocking `startsNewTask` in a test harness, or
 2. Using non-bridge origins (e.g., peer/subagent hand-offs), or
 3. Running checks in a single integrated test that doesn't cross user-prompt boundaries.
@@ -91,13 +93,13 @@ The escalation-ladder mod's decision logic is a state machine with complex inter
 
 ## Issue #9 status (2026-10-06): checks 1 and 2 passed; check 3 is negative
 
-- **Point 5 (prompt steering):** a `prompt.compose` hook appends a short "# Advisor" section while the ladder is on and the request lists an `advisor` tool. Validates and typechecks, but **whether it is actually in the prompt is unverified**: the guard assumes a server tool appears in compose's `tools` under that name. The hook now logs a `note` event once per change (`advisor steering: section added...` or `...skipped, no "advisor" in the request tools...`), visible in `/ladder log`. **Effect on consult rate: not measured.** The five effort-test runs in PLAN.md item 4 (short tasks) had no consults, which fits "skip on short reactive steps" but also fits a dead guard.
+- **Point 5 (prompt steering): removed (2026-10-13).** A headless session with `advisorModel` set and the ladder off already carries the harness's own "# Advisor Tool" section ("You have access to an `advisor` tool backed by a stronger reviewer model..."), which tells the model when to consult. The mod's `prompt.compose` section duplicated it, so the hook and its guard are gone. Whether that built-in wording gets consults on coding tasks is the open question, not the mod's.
 - **Check 1 (advisor attaches on a rewritten rung):** passed at rung 1.
 - **Check 2 (advisor survives the oracle rung):** passed. The crypto-design prompt ran one step on the oracle rung (spend: oracle +1 step, other rungs unchanged) and the advisor fired in that step. The pin survived the new-prompt reset. Not exercised: the oracle rung here was `claude-sonnet-5-5`, so the case where the main model outranks the advisor (refused pairing) is untested.
 - **Check 3 (advisor visible to the mod):** **negative.** My temporary `turn.step` log of `toolUses` named `advisor` recorded nothing during the crypto run, although the advisor fired (the transcript holds `server_tool_use` and `advisor_tool_result` blocks for it). The engine typings explain why: `tool.call` never fires for a server tool (the step showed 0 tool calls), `TurnStepResult.toolUses` is the response's client tool calls, and `TurnUsage` is four token counts plus the model, with no advisor breakdown. The earlier "PASS" in this file rested on the on-screen banner, which shows the user the advisor ran, not that the mod can see it.
 - **Untested route for check 3:** `$.session.messages({ as: "api" })` returns transcript blocks intact, so a `turn.complete` hook could count `server_tool_use` blocks named `advisor`. Not tried.
-- **`LADDER_TEST_MODE`:** covered by unit tests only. The mod runtime has no Node `process`, so the `typeof process` guard in `session.start` probably never installs the mock live. Do not rely on it for live runs.
+- **`LADDER_TEST_MODE`: removed.** It was never needed. The new-prompt reset has always kept `pinned` and the pinned rung (`register.tsx`, the reset in `prompt.submit`), and check 2 passed without it.
 - **Review:** catches real problems (leftover type errors, off-task work) and escalates on fail.
 
-**Still open:** cost data from `/usage`, measuring the steering effect, and the check 3 route above.
+**Still open:** advisor token cost (the transcript's `usage.iterations` has an `advisor_message` entry the mod never sees), and the check 3 route above.
 

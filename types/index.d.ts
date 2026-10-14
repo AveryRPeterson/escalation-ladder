@@ -31,7 +31,8 @@ export type Policy = {
   }
 }
 
-export type Spend = { steps: number; input: number; output: number; cacheRead: number }
+/** Per tier id. `cacheWrite` and `cost` (estimated dollars) are absent in runs stored by an older version. */
+export type Spend = { steps: number; input: number; output: number; cacheRead: number; cacheWrite?: number; cost?: number }
 
 export type RunState = {
   enabled: boolean

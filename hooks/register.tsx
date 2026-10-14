@@ -4,9 +4,9 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Effort, LadderEvent, Policy, RunState, Tier } from '../types'
 import { decide, shouldStepDown } from './lib/decide'
 import type { Signal } from './lib/decide'
-import { HELP, SETTINGS, STEPPERS, applySet, applyTier, formatStatus, gaugeSvg, listSettings, listTiers } from './lib/commands'
+import { HELP, SETTINGS, STEPPERS, applySet, applyTier, dollars, formatStatus, gaugeSvg, listSettings, listTiers } from './lib/commands'
 import { LoopDetector, errorKey, hash, signature } from './lib/loop'
-import { DEFAULT_PRESET, PRESETS, freshRun, normalizePolicy, peakAfter, pickReviewer, startsNewTask, setTestModeStartsNewTask } from './lib/policy'
+import { DEFAULT_PRESET, PRESETS, estimateCost, freshRun, normalizePolicy, peakAfter, pickReviewer, startsNewTask } from './lib/policy'
 import { REVIEW_SYSTEM, buildEvidence, parseVerdict } from './lib/review'
 import type { Verdict } from './lib/review'
 
@@ -23,6 +23,7 @@ type Usage = {
   input_tokens?: number
   output_tokens?: number
   cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
 } | null | undefined
 
 const label = (t: Tier | undefined) => (t ? `${t.id} (${t.model}/${t.effort})` : '?')
@@ -67,7 +68,15 @@ async function refreshStatus($: Eng) {
   )
 }
 
-async function addSpend($: Eng, key: string, u: Usage) {
+/** `model` prices the call. The native advisor's own tokens are not in `u`: the engine does not report them. */
+async function addSpend($: Eng, key: string, u: Usage, model: string) {
+  const t = {
+    input: u?.input_tokens ?? 0,
+    output: u?.output_tokens ?? 0,
+    cacheRead: u?.cache_read_input_tokens ?? 0,
+    cacheWrite: u?.cache_creation_input_tokens ?? 0,
+  }
+  const cost = estimateCost(model, t) ?? 0
   await update($, run$, r => {
     const s = r.spend[key] ?? { steps: 0, input: 0, output: 0, cacheRead: 0 }
     return {
@@ -76,9 +85,11 @@ async function addSpend($: Eng, key: string, u: Usage) {
         ...r.spend,
         [key]: {
           steps: s.steps + 1,
-          input: s.input + (u?.input_tokens ?? 0),
-          output: s.output + (u?.output_tokens ?? 0),
-          cacheRead: s.cacheRead + (u?.cache_read_input_tokens ?? 0),
+          input: s.input + t.input,
+          output: s.output + t.output,
+          cacheRead: s.cacheRead + t.cacheRead,
+          cacheWrite: (s.cacheWrite ?? 0) + t.cacheWrite,
+          cost: (s.cost ?? 0) + cost,
         },
       },
     }
@@ -153,7 +164,7 @@ async function runReview($: Eng, scope: 'task' | 'milestone', note?: string): Pr
     maxTokens: 800,
     timeoutMs: 90_000,
   })
-  await addSpend($, `review:${tier.id}`, r.usage)
+  await addSpend($, `review:${tier.id}`, r.usage, tier.model)
   if (!r.isAnswered) return { verdict: 'unsure', issues: [`reviewer unavailable (${r.reason})`] }
   return parseVerdict(r.text)
 }
@@ -230,12 +241,6 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const stored = await $.store.get('policy')
     const policy = normalizePolicy(stored ?? PRESETS[DEFAULT_PRESET])
-
-    // Test infrastructure: allow mocking startsNewTask to preserve pin across prompts (issue #9 check #2)
-    if (typeof process !== 'undefined' && process.env.LADDER_TEST_MODE === 'true') {
-      setTestModeStartsNewTask(originKind => originKind !== 'bridge')
-      await logEvent($, { kind: 'note', reason: 'LADDER_TEST_MODE enabled: pin preserved across bridge origins' })
-    }
 
     await update($, policy$, () => policy)
     const cur = await read($, run$)
@@ -347,16 +352,25 @@ export const register: Register = on => {
       // Advisor consults are server-tool blocks: they are not in res.toolUses and tool.call never
       // fires for them (see ADVISOR_COMPAT.md, check 3).
     } catch (err) {
-      await failOpen($, `request on ${tier.model} failed`)
+      // An interrupt aborts the step; that says nothing about the rung.
+      if (!next.signal.aborted) await failOpen($, `request on ${tier.model} failed`)
       throw err
     }
     if (res.stopReason === null && !res.usage) {
-      // No response arrived on a model we chose: assume the choice was refused.
-      await failOpen($, `${tier.model} (${tier.id}) was rejected`)
+      // No response arrived. The engine uses null for an interrupt as well as a failed request,
+      // so: an interrupt leaves the ladder on, and anything else must also fail a one-token probe
+      // of this rung before the ladder turns itself off (a transient API error is not a bad rung).
+      if (next.signal.aborted) return res
+      const probe = await $.model.complete({ model: tier.model, effort: 'low', prompt: 'Reply with the single word ok', maxTokens: 16, timeoutMs: 30_000 })
+      if (probe.isAnswered || probe.reason === 'aborted') {
+        await logEvent($, { kind: 'note', reason: `no response on ${tier.id} (${tier.model}); the rung answered a probe, ladder stays on` })
+      } else {
+        await failOpen($, `${tier.model} (${tier.id}) was rejected (${probe.reason})`)
+      }
       return res
     }
 
-    await addSpend($, tier.id, res.usage)
+    await addSpend($, tier.id, res.usage, tier.model)
     // A tool in this step (request_escalation, a loop hit) may already have moved
     // the rung while the response was still streaming. Such a step ran on the old
     // rung, so it must not count toward the new rung's budget or cooldown.
@@ -492,7 +506,7 @@ export const register: Register = on => {
       maxTokens: 2000,
       timeoutMs: 120_000,
     })
-    await addSpend($, `consult:${tier.id}`, r.usage)
+    await addSpend($, `consult:${tier.id}`, r.usage, tier.model)
     await logEvent($, { kind: 'escalate', reason: `consulted oracle: ${q.slice(0, 80)}` })
     return { result: r.isAnswered ? r.text : `The oracle was unavailable (${r.reason}). Proceed on your own judgment.` }
   })
@@ -514,47 +528,6 @@ export const register: Register = on => {
         v.verdict === 'pass'
           ? 'Milestone review: PASS. Continue to the next step.'
           : `Milestone review: ${v.verdict.toUpperCase()}.\n${v.issues.map(i => `- ${i}`).join('\n')}\nAddress these before moving on.`,
-    }
-  })
-
-  // ---------- advisor steering (issue #9 point 5) ----------
-  // Executors under-call the native advisor on coding tasks; one session-scoped
-  // section nudges the consult moments. Only while the ladder is on, so an off
-  // ladder leaves the system prompt (and its cache) untouched.
-  // The guard assumes a server tool is listed in e.tools under the name "advisor"; that is
-  // unverified, so the outcome is logged once per change and shows in /ladder log.
-  let steering = ''
-  on('prompt.compose', async ($, e, next) => {
-    const base = await next(e)
-    const run = await read($, run$)
-    if (!run.enabled) return base
-    const offered = e.tools.includes('advisor')
-    const outcome = offered ? 'applied' : 'skipped'
-    if (outcome !== steering) {
-      steering = outcome
-      const near = e.tools.filter(t => /advis/i.test(t))
-      await logEvent($, {
-        kind: 'note',
-        reason: offered
-          ? 'advisor steering: section added to the system prompt'
-          : `advisor steering: skipped, no "advisor" in the request tools (${e.tools.length} tools; advisor-like: ${near.join(',') || 'none'})`,
-      })
-    }
-    if (!offered) return base
-    return {
-      sections: [
-        ...base.sections,
-        {
-          id: 'escalation-ladder:advisor',
-          scope: 'session',
-          text: [
-            '# Advisor',
-            'You have an `advisor` tool. Call it before committing to an approach on any non-trivial task,',
-            'once more when you believe the work is done (after saving it), and when you are stuck,',
-            'errors recur, or you are about to change approach. Skip it for short, reactive steps.',
-          ].join('\n'),
-        },
-      ],
     }
   })
 
@@ -765,7 +738,7 @@ export const register: Register = on => {
             const isNow = i === run.tier
             return (
               <Text key={`t${i}`} bold={isNow} color={isNow ? 'green' : undefined} dimColor={!isNow}>
-                {isNow ? '>' : ' '} {i} {t.id.padEnd(7)} {t.model}/{t.effort}{i === p.baseTier ? '  [base]' : ''}{s ? `  ${s.steps} steps, ${s.input}in/${s.output}out, ${s.cacheRead} cached` : ''}
+                {isNow ? '>' : ' '} {i} {t.id.padEnd(7)} {t.model}/{t.effort}{i === p.baseTier ? '  [base]' : ''}{s ? `  ${s.steps} steps, ${s.input}in/${s.output}out, ${s.cacheRead} cached/${s.cacheWrite ?? 0} written, ${dollars(s.cost)}` : ''}
               </Text>
             )
           })}

@@ -75,6 +75,19 @@ describe('/ladder status and help', () => {
     expect(out).toContain('Escalations 1/4')
     expect(out).toContain('loop strikes 2/3')
   })
+  test('status spend lines carry cache writes and an estimated dollar total, tolerating older stored spend', () => {
+    const run = {
+      ...freshRun(P),
+      spend: {
+        worker: { steps: 2, input: 10, output: 500, cacheRead: 1000, cacheWrite: 2000, cost: 0.0123 },
+        scout: { steps: 1, input: 1, output: 2, cacheRead: 3 }, // stored before cacheWrite and cost existed
+      },
+    }
+    const out = formatStatus(run, P)
+    expect(out).toContain('worker: 2, 10, 500, 1000, 2000, $0.0123')
+    expect(out).toContain('scout: 1, 1, 2, 3, 0, $0.0000')
+    expect(out).toContain('total est.: $0.0123')
+  })
   test('status distinguishes off and breaker states', () => {
     expect(formatStatus({ ...freshRun(P), enabled: false }, P)).toContain('Ladder: OFF')
     expect(formatStatus({ ...freshRun(P), isBroken: true }, P)).toContain('STOPPED (breaker)')

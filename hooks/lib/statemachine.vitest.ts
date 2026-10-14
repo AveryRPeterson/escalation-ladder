@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import type { Policy, RunState } from '../../types'
-import { PRESETS, freshRun } from './policy'
+import { PRESETS, estimateCost, freshRun, priceFor } from './policy'
 import { decide } from './decide'
 import type { Signal, Move } from './decide'
 import { LoopDetector, hash, signature } from './loop'
@@ -348,6 +348,26 @@ describe('Escalation Ladder State Machine', () => {
       detector.push(seen('c3', 'r3', false))
       detector.push(seen('c4', 'r4', true, 'boom'))
       expect(detector.check(cfg)).toBeNull()
+    })
+  })
+
+  describe('Cost estimate', () => {
+    it('prices the four token kinds per million', () => {
+      // sonnet-5-5: $2 in, $10 out, $0.20 read, $4 write (2x input)
+      expect(estimateCost('claude-sonnet-5-5', { input: 1_000_000, output: 0, cacheRead: 0 })).toBeCloseTo(2)
+      expect(estimateCost('claude-sonnet-5-5', { input: 0, output: 1_000_000, cacheRead: 0 })).toBeCloseTo(10)
+      expect(estimateCost('claude-sonnet-5-5', { input: 0, output: 0, cacheRead: 1_000_000 })).toBeCloseTo(0.2)
+      expect(estimateCost('claude-sonnet-5-5', { input: 0, output: 0, cacheRead: 0, cacheWrite: 1_000_000 })).toBeCloseTo(4)
+    })
+    it('matches a dated model id to its family and gives no price to an unknown model', () => {
+      expect(priceFor('claude-haiku-4-5-20251001')).toEqual(priceFor('claude-haiku-4-5'))
+      expect(estimateCost('claude-made-up-9', { input: 5, output: 5, cacheRead: 5 })).toBeUndefined()
+    })
+    it('a cold switch costs far more than a warm step on the same context', () => {
+      const ctx = 200_000
+      const warm = estimateCost('claude-opus-5-5', { input: 0, output: 500, cacheRead: ctx })!
+      const cold = estimateCost('claude-opus-5-5', { input: 0, output: 500, cacheRead: 0, cacheWrite: ctx })!
+      expect(cold / warm).toBeGreaterThan(10)
     })
   })
 

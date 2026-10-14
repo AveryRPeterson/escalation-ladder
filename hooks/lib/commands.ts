@@ -99,6 +99,7 @@ export function applyTier(p: Policy, idx: string | undefined, model: string | un
 }
 
 const bar = (n: number, of: number) => `${n}/${of}`
+export const dollars = (n: number | undefined) => `$${(n ?? 0).toFixed(4)}`
 
 export function formatStatus(run: RunState, p: Policy): string {
   const t = p.tiers[run.tier]
@@ -115,8 +116,13 @@ export function formatStatus(run: RunState, p: Policy): string {
   if (run.lastLoop) lines.push(`Last loop: ${run.lastLoop}`)
   const spend = Object.entries(run.spend)
   if (spend.length) {
-    lines.push('Spend (steps, output tok, cache-read tok):')
-    for (const [k, s] of spend) lines.push(`  ${k}: ${s.steps}, ${s.output}, ${s.cacheRead}`)
+    lines.push('Spend (steps, uncached in, out, cache-read, cache-write tok, est. $; advisor tokens not included):')
+    let total = 0
+    for (const [k, s] of spend) {
+      total += s.cost ?? 0
+      lines.push(`  ${k}: ${s.steps}, ${s.input}, ${s.output}, ${s.cacheRead}, ${s.cacheWrite ?? 0}, ${dollars(s.cost)}`)
+    }
+    lines.push(`  total est.: ${dollars(total)}`)
   }
   return lines.join('\n')
 }

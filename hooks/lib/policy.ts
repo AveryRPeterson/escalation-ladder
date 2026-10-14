@@ -164,24 +164,42 @@ export function normalizePolicy(raw: unknown): Policy {
  * peer/subagent hand-backs, relays and the ladder's own follow-ups continue the
  * task in flight, so they must not clear loop strikes, the breaker or review rounds.
  *
- * For testing: set LADDER_TEST_MODE=true to allow bridge origins to be tested
- * in multi-request sequences without automatic task reset.
+ * A new task keeps the pin and the pinned rung (see the reset in register.tsx), so a test
+ * that pins a rung and sends several prompts needs no special mode.
  */
 const NEW_TASK_ORIGINS = ['composer', 'bridge', 'sdk', 'channel', 'slack-ping', 'auto-continuation', 'scheduled-trigger']
 
-// Test mode: allows mocking startsNewTask behavior. Never enabled in production.
-let testModeStartsNewTask: ((originKind: string) => boolean) | null = null
+export const startsNewTask = (originKind: string): boolean => NEW_TASK_ORIGINS.includes(originKind)
 
-export function setTestModeStartsNewTask(fn: ((originKind: string) => boolean) | null): void {
-  if (typeof process !== 'undefined' && process.env.LADDER_TEST_MODE !== 'true') {
-    throw new Error('setTestModeStartsNewTask() only allowed when LADDER_TEST_MODE=true')
-  }
-  testModeStartsNewTask = fn
+/**
+ * US dollars per million tokens. Sources: the claude-api reference's model table (2026-10-06 cache)
+ * for input, output and sonnet/opus cache reads. Verified against a real `claude -p` bill
+ * (sonnet-5-5, 2026-10-13, matched to $0.0001): input $2, output $10, 1-hour cache write 2x input,
+ * which is what Claude Code uses. Not verified: haiku-4-5's cache read (assumed 0.1x input) and
+ * the 1-hour write multiplier on haiku and opus (assumed 2x, as on sonnet).
+ * Effort has no price of its own: it only changes how many tokens the model generates.
+ * Unknown models cost 0 and are reported as such rather than guessed.
+ */
+export type Price = { input: number; output: number; cacheRead: number; cacheWrite: number }
+const price = (input: number, output: number, cacheRead: number, writeMult = 2): Price => ({ input, output, cacheRead, cacheWrite: input * writeMult })
+export const PRICES: Record<string, Price> = {
+  'claude-haiku-4-5': price(1, 5, 0.1),
+  'claude-sonnet-5-5': price(2, 10, 0.2),
+  'claude-opus-5-5': price(4, 20, 0.2),
 }
 
-export const startsNewTask = (originKind: string): boolean => {
-  if (testModeStartsNewTask) return testModeStartsNewTask(originKind)
-  return NEW_TASK_ORIGINS.includes(originKind)
+/** Price for a model id, matching a dated id (claude-haiku-4-5-20251001) to its family entry. */
+export function priceFor(model: string): Price | undefined {
+  return PRICES[model] ?? PRICES[model.replace(/-\d{8}$/, '')]
+}
+
+export type TokenCounts = { input: number; output: number; cacheRead: number; cacheWrite?: number }
+
+/** Estimated dollars for token counts on a model; undefined when the model has no price entry. */
+export function estimateCost(model: string, t: TokenCounts): number | undefined {
+  const p = priceFor(model)
+  if (!p) return undefined
+  return (t.input * p.input + t.output * p.output + t.cacheRead * p.cacheRead + (t.cacheWrite ?? 0) * p.cacheWrite) / 1_000_000
 }
 
 export function freshRun(policy: Policy, enabled = true): RunState {
