@@ -1,0 +1,5 @@
+`ratelimit.py` is a per-key sliding-window rate limiter used by our API gateway. Users report that clients are kept blocked for longer than the configured window, that clients which keep retrying while blocked stay blocked far longer still, and that the `retry_after` value we send in the 429 header is wrong. Find and fix the bugs in `ratelimit.py` and keep its public API unchanged.
+
+The intended behaviour: an event counts against the limit for exactly `window` seconds (an event at time `t` stops counting at `t + window`, so a request at exactly `t + window` is allowed); only allowed events count, denied attempts are not recorded; and `retry_after(key)` is the number of seconds until the next request for that key would be allowed, 0.0 if it would be allowed now. Calling `retry_after` must not change anything.
+
+Work in the current directory. Write whatever tests you need and run them. When you are done, say briefly what you changed and what you verified.

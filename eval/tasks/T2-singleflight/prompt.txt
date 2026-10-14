@@ -1,0 +1,12 @@
+`ttlcache.py` sits in front of an expensive lookup in a multi-threaded web server. Under load the lookup `fn()` runs many times at once for the same key. Rewrite `TTLCache.get_or_compute` so it is correct under concurrency. Requirements:
+
+1. While `fn()` for a key is running, other threads asking for the same key wait and receive that same result; `fn` runs once per key per flight.
+2. Calls for different keys must not block each other.
+3. If `fn()` raises, every thread waiting on that flight gets that same exception, nothing is cached, and the next call tries again.
+4. A value computed at time `t` is valid while `now < t + ttl`; the clock is the injected `clock`.
+5. `None` is a legitimate value and must be cached like any other.
+6. The ttl counts from when `fn()` finished, not from when it started.
+
+Keep the constructor signature and the `get_or_compute(key, fn)` API.
+
+Work in the current directory. Write whatever tests you need and run them. When you are done, say briefly what you changed and what you verified.

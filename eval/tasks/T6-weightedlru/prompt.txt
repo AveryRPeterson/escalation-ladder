@@ -1,0 +1,12 @@
+Implement `WeightedLRU` in `wlru.py`: a least-recently-used cache where every entry has an integer weight and the cache holds at most `capacity` total weight. Contract:
+
+- `WeightedLRU(capacity)`: `capacity` must be a positive int, otherwise `ValueError`.
+- `put(key, value, weight=1) -> bool`: `weight` must be a positive int, otherwise `ValueError` (checked before anything changes). If `weight > capacity` the entry cannot fit: return `False` and change nothing, including any existing entry under the same key. Otherwise store it (replacing any existing entry under that key, which then counts as most recently used), then evict least-recently-used entries until the total weight is within capacity, and return `True`. The entry that was just put is never evicted by its own put.
+- `get(key, default=None)`: return the value and mark the entry most recently used; return `default` if the key is absent.
+- `peek(key, default=None)`: like `get` but does not change recency.
+- `key in cache` does not change recency. `len(cache)` is the number of entries.
+- `total_weight()`: the sum of the entries' weights.
+- `keys()`: a list of keys from least to most recently used.
+- `None` is a legitimate stored value.
+
+Work in the current directory. Write whatever tests you need and run them. When you are done, say briefly what you changed and what you verified.

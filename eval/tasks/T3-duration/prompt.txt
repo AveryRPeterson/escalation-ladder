@@ -1,0 +1,12 @@
+Implement `parse_duration(text)` in `durations.py`. It converts a human duration string to a float number of seconds and is used to validate config files, so it must be strict. Rules:
+
+- A duration is one or more components, each a number followed by a unit: `w` (604800 s), `d` (86400 s), `h` (3600 s), `m` (60 s), `s` (1 s). Units are case-insensitive, so `1H` and `1h` are the same.
+- Whitespace is allowed between components and between a number and its unit: `1h 30m`, `1 h30 m`. Leading and trailing whitespace is ignored.
+- Components must appear in strictly descending unit order, and each unit may appear at most once. `1h30m` is fine; `30m1h` and `1h1h` are errors.
+- Numbers are non-negative decimals of the form `digits` or `digits.digits`. `.5` and `5.` are errors.
+- Only the last component may have a fractional part: `1h30.5m` is fine, `1.5h30m` is an error.
+- The string `0` on its own (ignoring surrounding whitespace) is valid and returns 0.0. Any other number without a unit, such as `5`, or a trailing bare number as in `1h30`, is an error.
+- An empty or whitespace-only string is an error. A sign (`+` or `-`), months, or any character not described above is an error.
+- Every error raises `ValueError`. Non-string input also raises `ValueError`.
+
+Work in the current directory. Write whatever tests you need and run them. When you are done, say briefly what you changed and what you verified.

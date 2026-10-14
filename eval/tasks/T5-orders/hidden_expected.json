@@ -1,0 +1,32 @@
+{
+  "2026-01": {
+    "orders": 42,
+    "gross_cents": 911698,
+    "refund_cents": 22679,
+    "net_cents": 889019
+  },
+  "2026-02": {
+    "orders": 34,
+    "gross_cents": 724118,
+    "refund_cents": 13325,
+    "net_cents": 710793
+  },
+  "2026-03": {
+    "orders": 43,
+    "gross_cents": 857641,
+    "refund_cents": 14081,
+    "net_cents": 843560
+  },
+  "2026-04": {
+    "orders": 44,
+    "gross_cents": 978954,
+    "refund_cents": 21157,
+    "net_cents": 957797
+  },
+  "2026-05": {
+    "orders": 44,
+    "gross_cents": 1046160,
+    "refund_cents": 10971,
+    "net_cents": 1035189
+  }
+}

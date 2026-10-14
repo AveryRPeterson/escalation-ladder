@@ -1,0 +1,12 @@
+Finance needs a monthly revenue report from three CSV exports in this directory: `orders.csv`, `refunds.csv` and `rates.csv`. Write `report.py` that reads them and writes `report.json`, then run it.
+
+Rules:
+- `orders.csv` can contain several rows for the same `order_id` (the order was updated). Use only the row with the latest `updated_at`; if two rows have the same `updated_at`, the later one in the file wins. Timestamps are ISO 8601 with a UTC offset, so compare them as instants.
+- Ignore orders whose kept row has `status` `cancelled`.
+- `amount` is in the order's `currency`, in major units (for example `12.34`; JPY has no decimals). `rates.csv` gives `usd_per_unit` per currency from an `effective_date` onward. For an order, use the rate with the latest `effective_date` that is on or before the order's `created_at` date, taken in UTC. USD needs no rate (it is 1).
+- Convert each order to USD cents, rounding half up on the cent, per order.
+- `refunds.csv` has partial refunds in the order's currency (`amount` positive). Convert each refund with the same rate its order used (the rate at the order's creation) and the same rounding, per refund. Ignore refunds for orders that are unknown or were excluded above. A refund counts in the month of its order's `created_at`, not the month it was refunded.
+- The month of an order is its `created_at` month in UTC (`YYYY-MM`).
+- `report.json` is an object keyed by month (keys in ascending order). Each value has integer fields `orders` (count of kept, non-cancelled orders), `gross_cents`, `refund_cents` and `net_cents` (`gross_cents - refund_cents`).
+
+Work in the current directory. When you are done, say briefly what you did and what you verified.
