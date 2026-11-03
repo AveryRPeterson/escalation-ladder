@@ -1,8 +1,7 @@
 # Spike: tiered model escalation ladder (Claude Code mod)
 
 **Status:** proof of concept written, statically verified (validate, 13 unit tests, strict `tsc`). **Not yet run in a live session.**
-**Code:** `C:\Users\CycleTranSister\.claude\dev-mods\2beefaee-9e21-4ab2-af56-3ef08da00a0a\escalation-ladder\` (mod name `escalation-ladder`)
-Written there because that is the folder hot-reload watches; this file is the spike's home.
+**Code:** this repository (mod name `escalation-ladder`). It was developed in a Claude Code dev-mods folder, the directory hot-reload watches; this file is the spike's home.
 
 ## Question the spike answers
 

@@ -26,7 +26,7 @@ from datetime import datetime
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 TASKS_DIR = os.path.join(ROOT, "tasks")
-MOD_DIR = r"C:\Users\CycleTranSister\.claude\dev-mods\2beefaee-9e21-4ab2-af56-3ef08da00a0a\escalation-ladder"
+MOD_DIR = os.environ.get("LADDER_PLUGIN_DIR", os.path.dirname(ROOT))
 WORK_BASE = os.path.join(tempfile.gettempdir(), "ladder-eval", "runs")
 
 ARMS = {
